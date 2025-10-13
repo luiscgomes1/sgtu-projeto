@@ -28,7 +28,8 @@ export function setupAlunoBot(bot) {
                 token: data.token, 
                 userId: data.user.id,
                 tipo: data.user.tipo,
-                nome: data.user.nome
+                nome: data.user.nome,
+                status: data.user.status || data.user.usuarios?.status,
              });
             ctx.reply("✅ Login realizado com sucesso!");
         } catch (error) {

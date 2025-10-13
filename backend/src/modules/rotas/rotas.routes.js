@@ -7,6 +7,13 @@ import { sanitizeData } from "../../middleware/sanitize.js";
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Rotas
+ *     description: Gerenciamento de rotas
+ */
+
 router.post(
   "/",
   requireAuth,
@@ -17,6 +24,16 @@ router.post(
 );
 
 router.get("/", requireAuth, RotaController.listRotasController);
+/**
+ * @swagger
+ * /rotas:
+ *   get:
+ *     summary: Lista todas as rotas (admin)
+ *     tags:
+ *       - Rotas
+ *     security:
+ *       - bearerAuth: []
+ */
 
 router.get(
     "/:id", 

@@ -8,6 +8,23 @@ import { sanitizeData } from "../../middleware/sanitize.js";
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Motoristas
+ *     description: Gestão de motoristas
+ */
+
+/**
+ * @swagger
+ * /motoristas:
+ *   post:
+ *     summary: Cria motorista (admin)
+ *     tags:
+ *       - Motoristas
+ *     security:
+ *       - bearerAuth: []
+ */
 // Apenas admin pode gerenciar motoristas
 router.post(
   "/",
@@ -18,8 +35,29 @@ router.post(
   MotoristaController.createMotoristaController
 );
 
+/**
+ * @swagger
+ * /motoristas:
+ *   get:
+ *     summary: Lista motoristas
+ *     tags:
+ *       - Motoristas
+ *     security:
+ *       - bearerAuth: []
+ */
 router.get("/", requireAuth, MotoristaController.listMotoristasController);
 
+
+/**
+ * @swagger
+ * /motoristas/{id}:
+ *   get:
+ *     summary: Obtém motorista por id
+ *     tags:
+ *       - Motoristas
+ *     security:
+ *       - bearerAuth: []
+ */
 router.get(
   "/:id",
   requireAuth,

@@ -9,6 +9,15 @@ const options = {
       version: '1.0.0',
       description: 'API do SGTU — documentação automática gerada via swagger-jsdoc',
     },
+     components: {
+       securitySchemes: {
+         bearerAuth: {
+           type: 'http',
+           scheme: 'bearer',
+           bearerFormat: 'JWT'
+         }
+       }
+     },
     servers: [
       { url: process.env.API_BASE_URL || 'http://localhost:4000/api' }
     ],

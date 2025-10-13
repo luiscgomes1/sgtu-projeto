@@ -30,6 +30,28 @@ router.get(
   validate(CarteirinhaSchema.alunoIdParamsSchema, "params"),
   CarteirinhasController.obterCarteirinhaAtivaController
 );
+/**
+ * @swagger
+ * /carteirinhas/minha-carteirinha/{alunoId}:
+ *   get:
+ *     summary: Obtém a carteirinha ativa de um aluno (requer autenticação)
+ *     tags:
+ *       - Carteirinhas
+ *     parameters:
+ *       - in: path
+ *         name: alunoId
+ *         schema:
+ *           type: string
+ *         required: true
+ *         description: ID do aluno
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Retorna a lista de carteirinhas (ou a carteirinha ativa)
+ *       '401':
+ *         description: Não autenticado
+ */
 
 //Validar QR Code: aluno no ônibus
 router.post(

@@ -4,6 +4,23 @@ import * as RelatoriosController from './relatorios.controller.js';
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Relatorios
+ *     description: Relatórios e exportação de dados
+ */
+
+/**
+ * @swagger
+ * /relatorios/presencas/rota/{rotaId}:
+ *   get:
+ *     summary: Relatório de presenças por rota (admin)
+ *     tags:
+ *       - Relatorios
+ *     security:
+ *       - bearerAuth: []
+ */
 router.get('/presencas/rota/:rotaId', requireAuth, requireRole('admin'), RelatoriosController.presencasPorRotasController);
 
 router.get('/presencas/aluno/:alunoId', requireAuth, requireRole('admin'), RelatoriosController.presencasPorAlunoController);

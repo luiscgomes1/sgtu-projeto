@@ -8,6 +8,13 @@ import { sanitizeData } from "../../middleware/sanitize.js";
 
 const router = Router();
 
+/**
+ * @swagger
+ * tags:
+ *   - name: Faculdades
+ *     description: Gerenciamento de faculdades
+ */
+
 router.post(
   "/",
   requireAuth,
@@ -16,8 +23,26 @@ router.post(
   validate(FaculdadesSchema.faculdadeCreateSchema),
   FaculdadesController.createFaculdadeController
 );
+/**
+ * @swagger
+ * /faculdades:
+ *   post:
+ *     summary: Cria uma faculdade (admin)
+ *     tags:
+ *       - Faculdades
+ *     security:
+ *       - bearerAuth: []
+ */
 
 router.get("/", FaculdadesController.listFaculdadesController);
+/**
+ * @swagger
+ * /faculdades:
+ *   get:
+ *     summary: Lista faculdades
+ *     tags:
+ *       - Faculdades
+ */
 
 router.get(
   "/:id",
