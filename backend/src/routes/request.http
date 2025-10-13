@@ -1,0 +1,67 @@
+### REST Client requests for local backend
+
+
+@host = http://localhost:4000
+# Paste a token here for manual testing, or leave empty and use the curl snippet below
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjQ3ZmExMWUxLTgxMmEtNGRlZS1hZmUwLTNiMjU4ZTRmNzM4NiIsIm5vbWUiOiJMdWlzIEFsYmVydG8gQ2FydmFsaG8gR29tZXMiLCJlbWFpbCI6Imx1aXMuY2dvbWVzMUBvdXRsb29rLmNvbSIsInRpcG8iOiJhbHVubyIsInN0YXR1cyI6ImF0aXZvIiwiaWF0IjoxNzYwMTIzNjM4LCJleHAiOjE3NjAxNTI0Mzh9.jBPwqL3-dj5-vlpgr_23eRy2ZBgISmJUgnfF1cOF9Uk
+
+# qrcode token (will be returned by GET /api/carteirinhas/minha-carteirinha/:alunoId)
+@token_qrcode = 6e4700d1-0735-4dfd-8374-363a54c10df5
+
+# Example alunoId (replace with actual id from GET /api/alunos/me)
+@alunoId = 47fa11e1-812a-4dee-afe0-3b258e4f7386
+
+###
+# 1) Login (use this to obtain a token and paste into @token)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+	"email": "luis.cgomes1@outlook.com",
+	"senha": "0089@Luis"
+}
+
+# Optional (bash) quick token extraction (runs in your terminal, not REST Client):
+# curl -s -X POST {{host}}/api/auth/login -H "Content-Type: application/json" -d '{"email":"luis.cgomes1@outlook.com","senha":"0089@Luis"}' | jq -r '.token' | xargs -I{} printf "export TOKEN=%s\n" "{}"
+# After running the line above in bash, you can use $TOKEN in subsequent curl commands.
+
+###
+# 2) Marcar presença (aluno autenticado)
+# - Este endpoint usa o token do usuário (Authorization header). Não precisa body.
+POST {{host}}/api/presencas/marcar-presenca
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+
+###
+# 2.a) Obter dados do usuário autenticado (inclui aluno/usuario id)
+GET {{host}}/api/alunos/me
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+
+# 3) Confirmar presença (ida) via QR token
+POST {{host}}/api/presencas/confirmar-embarque
+Content-Type: application/json
+
+{
+	"token": "{{token_qrcode}}"
+}
+
+###
+# 4) Confirmar presença (volta) via QR token
+POST {{host}}/api/presencas/confirmar-volta
+Content-Type: application/json
+
+{
+	"token": "{{token_qrcode}}"
+}
+
+###
+# 5) Obter carteirinha ativa (para pegar o qrcode_token)
+# - Substitua {{alunoId}} pelo ID do aluno ou use o token de sessão para obter o alunoId antes
+GET {{host}}/api/carteirinhas/minha-carteirinha/{{alunoId}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+
