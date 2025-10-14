@@ -14,13 +14,26 @@ export async function listarAlunosController(req, res, next) {
 
 export async function listAlunosPaginatedController(req, res, next) {
     try {
-        const { status_cadastro, limit = 10, offset = 0 } = req.query;
-        const {data, total} = await AlunoService.listAlunosPaginated({
-          status_cadastro,
-          limit: parseInt(limit),
-          offset: parseInt(offset),
-        });
-        res.json({ data, total });
+                const { status_cadastro, limit = 10, offset = 0, faculdade_id, curso_id, search } = req.query;
+                const {data, total} = await AlunoService.listAlunosPaginated({
+                    status_cadastro,
+                    limit: parseInt(limit),
+                    offset: parseInt(offset),
+                    faculdade_id: faculdade_id || null,
+                    curso_id: curso_id || null,
+                    search: search || null,
+                });
+                res.json({ data, total });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function obterEstatisticasController(req, res, next) {
+    try {
+        const { status_cadastro } = req.query;
+        const stats = await AlunoService.obterEstatisticas({ status_cadastro });
+        res.json(stats);
     } catch (error) {
         next(error);
     }
@@ -86,4 +99,13 @@ export async function renviarDocumentosController(req, res, next) {
   } catch (error) {
     next(error);
   }
+}
+
+export async function obterContagensController(req, res, next) {
+    try {
+        const counts = await AlunoService.obterContagens();
+        res.json(counts);
+    } catch (error) {
+        next(error);
+    }
 }

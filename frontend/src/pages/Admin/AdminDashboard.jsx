@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../services/api.js";
 import { GlobalLoader}  from "../../components/GlobalLoader.jsx";
@@ -15,26 +15,33 @@ import {
   FaAngleRight,
 } from "react-icons/fa";
 
-// Configuração da Paginação
 const ITEMS_PER_PAGE = 5;
 
 export default function AdminDashboard() {
   const [pendentes, setPendentes] = useState([]);
-  const [aprovados, setAprovados] = useState([]);
-  const [rejeitados, setRejeitados] = useState([]);
-
   const [totalPendentes, setTotalPendentes] = useState(0);
   const [totalAprovados, setTotalAprovados] = useState(0);
   const [totalRejeitados, setTotalRejeitados] = useState(0);
-
   const [pagePendentes, setPagePendentes] = useState(1);
-  const [pageAprovados, setPageAprovados] = useState(1);
-  const [pageRejeitados, setPageRejeitados] = useState(1);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { showToast } = useToast();
 
-  async function fetchRequests(status, page, setData, setTotal) {
+  const fetchCounts = useCallback(async () => {
+    try {
+      const { data } = await api.get("/alunos/counts");
+      if (data) {
+        setTotalPendentes(data.pendentes || 0);
+        setTotalAprovados(data.aprovados || 0);
+        setTotalRejeitados(data.reprovados || 0);
+      }
+    } catch (error) {
+      const msg = error.response?.data?.error || "Erro ao carregar contagens.";
+      showToast("error", msg);
+    }
+  }, [showToast]);
+
+  const fetchRequests = useCallback(async (status, page, setData, setTotal) => {
     try {
       if (status === "aprovado") {
         const { data } = await api.get("/alunos/paginated", {
@@ -64,23 +71,15 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  }
+  }, [showToast]);
 
   useEffect(() => {
     document.title = "Dashboard Admin - SGTU";
     fetchRequests("pendente", pagePendentes, setPendentes, setTotalPendentes);
-    fetchRequests("aprovado", pageAprovados, setAprovados, setTotalAprovados);
-    fetchRequests(
-      "reprovado",
-      pageRejeitados,
-      setRejeitados,
-      setTotalRejeitados
-    );
-  }, [pagePendentes, pageAprovados, pageRejeitados]);
+    fetchCounts();
+  }, [pagePendentes, fetchRequests, fetchCounts]);
 
   const totalPagesPendentes = Math.ceil(totalPendentes / ITEMS_PER_PAGE);
-  const totalPagesAprovados = Math.ceil(totalAprovados / ITEMS_PER_PAGE);
-  const totalPagesRejeitados = Math.ceil(totalRejeitados / ITEMS_PER_PAGE);
 
   if (loading) return <GlobalLoader />;
 
@@ -191,106 +190,6 @@ export default function AdminDashboard() {
                       )
                     }
                     disabled={pagePendentes === totalPagesPendentes}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition flex items-center"
-                  >
-                    Próxima <FaAngleRight className="ml-1" />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* Aprovados */}
-        <section className="mb-10 p-5 border border-green-300 rounded-lg bg-green-50">
-          <h3 className="text-xl font-semibold text-green-800 mb-4 flex items-center">
-            <FaCheckDouble className="mr-2" />
-            Aprovados ({totalAprovados} total)
-          </h3>
-
-          {aprovados.length === 0 ? (
-            <p className="text-gray-600">Nenhum aluno aprovado no momento.</p>
-          ) : (
-            <>
-              <ul className="space-y-3">
-                {aprovados.map(
-                  (req) => (
-                    <RequestItem
-                      key={req.usuario_id || req.id}
-                      req={req}
-                      isApproved={true}
-                    />
-                  )
-                )}
-              </ul>
-
-              {totalPagesAprovados > 1 && (
-                <div className="flex justify-center items-center space-x-4 mt-6">
-                  <button
-                    onClick={() => setPageAprovados((p) => Math.max(p - 1, 1))}
-                    disabled={pageAprovados === 1}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition flex items-center"
-                  >
-                    <FaAngleLeft className="mr-1" /> Anterior
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    Página {pageAprovados} de {totalPagesAprovados}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setPageAprovados((p) =>
-                        Math.min(p + 1, totalPagesAprovados)
-                      )
-                    }
-                    disabled={pageAprovados === totalPagesAprovados}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition flex items-center"
-                  >
-                    Próxima <FaAngleRight className="ml-1" />
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </section>
-
-        {/* Rejeitados */}
-        <section className="p-5 border border-red-300 rounded-lg bg-red-50">
-          <h3 className="text-xl font-semibold text-red-800 mb-4 flex items-center">
-            <FaTimesCircle className="mr-2" />
-            Rejeitados ({totalRejeitados} total)
-          </h3>
-
-          {rejeitados.length === 0 ? (
-            <p className="text-gray-600">Nenhum aluno reprovado no momento.</p>
-          ) : (
-            <>
-              <ul className="space-y-3">
-                {rejeitados.map(
-                  (req) => (
-                    <RequestItem key={req.usuario_id || req.id} req={req} />
-                  )
-                )}
-              </ul>
-
-              {totalPagesRejeitados > 1 && (
-                <div className="flex justify-center items-center space-x-4 mt-6">
-                  <button
-                    onClick={() => setPageRejeitados((p) => Math.max(p - 1, 1))}
-                    disabled={pageRejeitados === 1}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition flex items-center"
-                  >
-                    <FaAngleLeft className="mr-1" /> Anterior
-                  </button>
-                  <span className="text-sm text-gray-600">
-                    Página {pageRejeitados} de {totalPagesRejeitados}
-                  </span>
-                  <button
-                    onClick={() =>
-                      setPageRejeitados((p) =>
-                        Math.min(p + 1, totalPagesRejeitados)
-                      )
-                    }
-                    disabled={pageRejeitados === totalPagesRejeitados}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg disabled:opacity-50 hover:bg-gray-300 transition flex items-center"
                   >
                     Próxima <FaAngleRight className="ml-1" />

@@ -47,7 +47,6 @@ export async function desvincularAlunoPonto(alunoId, pontoId) {
 }
 
 export async function listarPontoDoAluno(alunoId) {
-    // 1. Busca o ponto ativo do aluno
     const { data: alunoPonto, error } = await supabase
         .from('alunos_pontos')
         .select('id, status, aluno_id, ponto_id, pontos(id, nome, endereco)')
@@ -57,7 +56,6 @@ export async function listarPontoDoAluno(alunoId) {
     if (error) throw error;
     if (!alunoPonto) return null;
 
-    // 2. Descobre a faculdade do aluno
     const { data: aluno, error: alunoError } = await supabase
         .from('alunos')
         .select('curso_id, cursos(faculdade_id)')
@@ -67,7 +65,6 @@ export async function listarPontoDoAluno(alunoId) {
     const faculdadeId = aluno?.cursos?.faculdade_id;
     if (!faculdadeId) return { ...alunoPonto, rota: null };
 
-    // 3. Busca as rotas que passam no ponto
     const { data: rotaPontos, error: rotaPontosError } = await supabase
         .from('rota_pontos')
         .select('rota_id')
@@ -78,7 +75,6 @@ export async function listarPontoDoAluno(alunoId) {
 
     if (!rotaIds.length) return { ...alunoPonto, rota: null };
 
-    // 4. Busca a rota que atende a faculdade do aluno
     const { data: rotaFaculdade, error: rotaFaculdadeError } = await supabase
         .from('rota_faculdades')
         .select('rota_id')
@@ -89,7 +85,6 @@ export async function listarPontoDoAluno(alunoId) {
     if (rotaFaculdadeError) throw rotaFaculdadeError;
     if (!rotaFaculdade) return { ...alunoPonto, rota: null };
 
-    // 5. Busca o nome da rota
     const { data: rota, error: rotaError } = await supabase
         .from('rotas')
         .select('id, nome')
@@ -97,7 +92,6 @@ export async function listarPontoDoAluno(alunoId) {
         .maybeSingle();
     if (rotaError) throw rotaError;
 
-    // Retorno final
     return {
         id: alunoPonto.ponto_id,
         nome: alunoPonto.pontos?.nome,
@@ -110,18 +104,18 @@ export async function listarPontoDoAluno(alunoId) {
 export async function listarAlunosDoPonto(pontoId) {
     const { data, error } = await supabase
         .from('alunos_pontos')
-        .select('aluno_id, status, alunos(usuario_id, nome, cpf, rg, email, telefone)')
+        .select('aluno_id, status, alunos(usuario_id, usuarios(nome), cpf, rg, email, telefone)')
         .eq('ponto_id', pontoId)
         .eq('status', 'ativo');
     
     if (error) throw error;
     return data.map(item => ({
         id: item.aluno_id,
-        nome: item.alunos.nome,
-        email: item.alunos.email,
-        cpf: item.alunos.cpf,
-        rg: item.alunos.rg,
-        telefone: item.alunos.telefone,
+        nome: item.alunos?.usuarios?.nome,
+        email: item.alunos?.email,
+        cpf: item.alunos?.cpf,
+        rg: item.alunos?.rg,
+        telefone: item.alunos?.telefone,
         status: item.status
     }));
 }

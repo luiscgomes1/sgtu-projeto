@@ -94,7 +94,7 @@ export async function confirmarVoltaController(req, res, next) {
     try {
         const { token } = req.body;
 
-        const alunoId = await PresencasService.validarQRCode(token);
+        const alunoId = await validarQRCode(token);
         if(!alunoId) return res.status(400).json({ error: "Token inválido" });
 
         const presenca = await PresencasService.confirmarPresencaVoltaQrCode(alunoId);

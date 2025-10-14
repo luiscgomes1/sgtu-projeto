@@ -15,21 +15,81 @@ export async function listAlunosPaginated({
   status_cadastro,
   limit = 10,
   offset = 0,
+  faculdade_id = null,
+  curso_id = null,
+  search = null,
 }) {
   let query = supabase
     .from("alunos")
     .select(
-      "*, usuarios(id, nome, email, tipo, status), cursos(nome, faculdade_id, faculdades(nome))",
+      "*, usuarios(id, nome, email, tipo, status), cursos(id, nome, faculdade_id, faculdades(id, nome))",
       { count: "exact" }
-    )
-    .eq("status_cadastro", status_cadastro)
-    .range(offset, offset + limit - 1);
+    );
+
+  if (status_cadastro) query = query.eq("status_cadastro", status_cadastro);
+  if (curso_id) query = query.eq("curso_id", curso_id);
+
+  if (faculdade_id) query = query.eq("cursos.faculdade_id", faculdade_id);
+
+  if (search) {
+    const { data: users, error: usersErr } = await supabase
+      .from("usuarios")
+      .select("id")
+      .or(`nome.ilike.${q},email.ilike.${q}`);
+
+    if (usersErr) throw usersErr;
+
+    const ids = (users || []).map((u) => u.id);
+    if (ids.length === 0) {
+      return { data: [], total: 0 };
+    }
+
+    query = query.in("usuario_id", ids);
+  }
+
+  query = query.range(offset, offset + limit - 1);
 
   const { data, error, count } = await query;
 
   if (error) throw error;
 
   return { data, total: count };
+}
+
+export async function obterEstatisticas({ status_cadastro = null } = {}) {
+  let query = supabase
+    .from("alunos")
+    .select("curso_id, status_cadastro, cursos(id, nome, faculdade_id, faculdades(id, nome))");
+
+  if (status_cadastro) query = query.eq("status_cadastro", status_cadastro);
+
+  const { data: alunos, error } = await query;
+  if (error) throw error;
+
+  const porCurso = {};
+  const porFaculdade = {};
+
+  for (const a of alunos || []) {
+    const curso = a.cursos || {};
+    const faculdade = curso.faculdades || {};
+
+    const cursoKey = curso.id || a.curso_id || 'desconhecido';
+    if (!porCurso[cursoKey]) {
+      porCurso[cursoKey] = { curso_id: curso.id || null, nome: curso.nome || 'Desconhecido', total: 0 };
+    }
+    porCurso[cursoKey].total += 1;
+
+    const facKey = faculdade.id || curso.faculdade_id || 'desconhecida';
+    if (!porFaculdade[facKey]) {
+      porFaculdade[facKey] = { faculdade_id: faculdade.id || curso.faculdade_id || null, nome: faculdade.nome || 'Desconhecida', total: 0 };
+    }
+    porFaculdade[facKey].total += 1;
+  }
+
+  return {
+    porCurso: Object.values(porCurso),
+    porFaculdade: Object.values(porFaculdade),
+  };
 }
 
 export async function obterAluno(id) {
@@ -67,7 +127,6 @@ export async function obterAluno(id) {
 }
 
 export async function obterMeuPerfil(id) {
-  // Tenta buscar como aluno aprovado
   const { data: aluno, error: errorAluno } = await supabase
     .from("alunos")
     .select(
@@ -81,7 +140,6 @@ export async function obterMeuPerfil(id) {
     return aluno;
   }
 
-  // Se não for aluno aprovado, busca na signup_requests
   const { data: request, error: errorRequest } = await supabase
     .from("signup_requests")
     .select("*, cursos(nome, faculdade_id, faculdades(nome))")
@@ -162,4 +220,29 @@ export async function reenviarDocumentos(usuarioId, payload) {
 
   if (error) throw error;
   return data;
+}
+
+export async function obterContagens() {
+  try {
+    const statuses = ["pendente", "aprovado", "reprovado"];
+    const results = {};
+
+    for (const s of statuses) {
+      const { count, error } = await supabase
+        .from("alunos")
+        .select("usuario_id", { count: "exact", head: true })
+        .eq("status_cadastro", s);
+
+      if (error) throw error;
+      results[s] = count || 0;
+    }
+
+    return {
+      pendentes: results["pendente"],
+      aprovados: results["aprovado"],
+      reprovados: results["reprovado"],
+    };
+  } catch (err) {
+    throw err;
+  }
 }

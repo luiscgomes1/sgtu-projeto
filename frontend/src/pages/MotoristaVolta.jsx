@@ -10,9 +10,8 @@ import {
   FaClock,
   FaRedo,
 } from "react-icons/fa";
-import { formatTime } from "../../../backend/src/utils/functions.js"; // Supondo um utilitário para formatar tempo
-
-const REFRESH_INTERVAL = 30000; // 30 segundos
+import { formatTime } from "../../../backend/src/utils/functions.js";
+const REFRESH_INTERVAL = 30000;
 
 export default function MotoristaVolta() {
   const [searchParams] = useSearchParams();
@@ -20,6 +19,7 @@ export default function MotoristaVolta() {
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [selectedRota, setSelectedRota] = useState(null);
 
   const token = searchParams.get("token");
 
@@ -33,12 +33,14 @@ export default function MotoristaVolta() {
     const endpoint = `/viagens/hoje/volta/status?token=${token}`;
 
     try {
-      if (!data) setLoading(true);
+      setLoading(true);
       setError(null);
 
       const response = await api.get(endpoint);
       setData(response.data);
       setLastUpdated(new Date());
+      const rotas = Object.keys(response.data.resumoPorRota || {});
+      setSelectedRota((prev) => prev ?? (rotas.length ? rotas[0] : null));
     } catch (err) {
       console.error("Erro ao carregar status da volta:", err);
       const msg =
@@ -59,76 +61,6 @@ export default function MotoristaVolta() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
-  const renderListaVolta = () => {
-    if (!data || Object.keys(data.resumoPorRota).length === 0) {
-      return (
-        <p className="text-gray-600">
-          Nenhuma presença de ida confirmada ainda para hoje.
-        </p>
-      );
-    }
-
-    return (
-      <div className="space-y-6">
-        {Object.entries(data.resumoPorRota).map(([rotaNome, resumo]) => (
-          <div
-            key={rotaNome}
-            className="bg-white p-4 rounded-lg shadow border border-blue-100"
-          >
-            <h3 className="text-xl font-bold text-blue-700 mb-3 flex items-center">
-              <FaBusAlt className="mr-2" /> {rotaNome}
-            </h3>
-
-            {/* Resumo */}
-            <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md mb-4">
-              <p className="font-semibold text-lg text-gray-700">
-                Faltam:{" "}
-                <span className="text-red-600">
-                  {resumo.totalIda - resumo.totalVolta}
-                </span>{" "}
-                alunos
-              </p>
-              <p className="font-semibold text-lg text-gray-700">
-                No Ônibus:{" "}
-                <span className="text-green-600">{resumo.totalVolta}</span>
-              </p>
-            </div>
-
-            {/* Lista Detalhada */}
-            <div className="max-h-60 overflow-y-auto space-y-2">
-              {resumo.detalhes
-                .sort((a, b) => a.confirmadoVolta - b.confirmadoVolta) // Faltantes primeiro
-                .map((aluno) => (
-                  <div
-                    key={aluno.id}
-                    className={`flex justify-between p-2 rounded ${
-                      aluno.confirmadoVolta ? "bg-green-50" : "bg-red-50"
-                    }`}
-                  >
-                    <span className="font-medium">{aluno.nome}</span>
-                    <span
-                      className={`text-sm font-semibold ${
-                        aluno.confirmadoVolta
-                          ? "text-green-700"
-                          : "text-red-700"
-                      }`}
-                    >
-                      {aluno.confirmadoVolta ? (
-                        <FaCheckCircle className="inline mr-1" />
-                      ) : (
-                        <FaTimesCircle className="inline mr-1" />
-                      )}
-                      {aluno.confirmadoVolta ? "Confirmado" : "Faltando"}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   if (loading && !data) return <GlobalLoader />;
   if (error)
     return (
@@ -141,9 +73,12 @@ export default function MotoristaVolta() {
       </div>
     );
 
+  const rotas = Object.keys(data?.resumoPorRota || {});
+  const resumo = selectedRota ? data.resumoPorRota[selectedRota] : null;
+
   return (
     <div className="min-h-screen bg-gray-100 p-6">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h1 className="text-3xl font-extrabold text-gray-800 mb-4 flex items-center">
           Painel de Embarque de Volta
         </h1>
@@ -152,10 +87,9 @@ export default function MotoristaVolta() {
           check-in na ida.
         </p>
 
-        {/* Status de Atualização */}
         <div className="flex justify-between items-center p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded mb-6">
           <span className="text-sm font-medium text-yellow-800">
-            <FaClock className="inline mr-2" /> Última Atualização:{" "}
+            <FaClock className="inline mr-2" /> Última Atualização: {" "}
             {lastUpdated ? formatTime(lastUpdated) : "Carregando..."}
           </span>
           <button
@@ -163,12 +97,100 @@ export default function MotoristaVolta() {
             disabled={loading}
             className="text-blue-600 hover:text-blue-800 text-sm font-semibold flex items-center"
           >
-            <FaRedo className={`mr-1 ${loading ? "animate-spin" : ""}`} />{" "}
-            Atualizar
+            <FaRedo className={`mr-1 ${loading ? "animate-spin" : ""}`} /> Atualizar
           </button>
         </div>
 
-        {renderListaVolta()}
+        <div className="mb-4">
+          <div className="flex space-x-2">
+            {rotas.length === 0 && (
+              <div className="text-gray-600">Nenhuma rota encontrada hoje.</div>
+            )}
+            {rotas.map((r) => (
+              <button
+                key={r}
+                onClick={() => setSelectedRota(r)}
+                className={`px-4 py-2 rounded-md font-semibold ${
+                  r === selectedRota ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-between items-start gap-6">
+          <div className="w-1/2 bg-white p-4 rounded-lg shadow border">
+            <h2 className="text-xl font-bold text-gray-700 mb-3 flex items-center">
+              <FaBusAlt className="mr-2" /> Ida - Confirmaram
+            </h2>
+
+            <div className="mb-4">
+              <p className="font-semibold text-gray-700">Total: {resumo ? resumo.totalIda : 0}</p>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-2">
+              {resumo?.detalhes?.map((aluno) => (
+                <div key={aluno.id} className="flex justify-between p-2 rounded bg-gray-50">
+                  <div>
+                    <div className="font-medium">{aluno.nome}</div>
+                    <div className="text-sm text-gray-500">{aluno.faculdade}</div>
+                  </div>
+                  <div className="text-sm text-blue-600 font-semibold">Ida</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+
+          <div className="w-1/2 bg-white p-4 rounded-lg shadow border">
+            <h2 className="text-xl font-bold text-gray-700 mb-3 flex items-center">
+              <FaBusAlt className="mr-2" /> Volta - Status
+            </h2>
+
+            <div className="flex justify-between items-center bg-blue-50 p-3 rounded-md mb-4">
+              <p className="font-semibold text-lg text-gray-700">
+                Faltam: <span className="text-red-600">{resumo ? resumo.totalIda - resumo.totalVolta : 0}</span>
+              </p>
+              <p className="font-semibold text-lg text-gray-700">
+                No Ônibus: <span className="text-green-600">{resumo ? resumo.totalVolta : 0}</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">No Ônibus</h3>
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                  {resumo?.detalhes?.filter(a => a.confirmadoVolta).map(aluno => (
+                    <div key={aluno.id} className="flex items-center p-2 rounded bg-green-50">
+                      <FaCheckCircle className="text-green-600 mr-2" />
+                      <div>
+                        <div className="font-medium">{aluno.nome}</div>
+                        <div className="text-sm text-gray-500">{aluno.telefone || ''}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="font-semibold text-gray-700 mb-2">Faltando</h3>
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                  {resumo?.detalhes?.filter(a => !a.confirmadoVolta).map(aluno => (
+                    <div key={aluno.id} className="flex items-center p-2 rounded bg-red-50">
+                      <FaTimesCircle className="text-red-600 mr-2" />
+                      <div>
+                        <div className="font-medium">{aluno.nome}</div>
+                        <div className="text-sm text-gray-500">{aluno.telefone || ''}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import AdminEscalas from "./pages/Admin/AdminEscalas";
 import AdminRelatorios from "./pages/Admin/AdminRelatorios";
 import Perfil from "./pages/Perfil";
 import MotoristaVolta from "./pages/MotoristaVolta";
+import AdminAlunos from "./pages/Admin/AdminAlunos";
 //import AcessoNegado from "./pages/AcessoNegado";
 
 
@@ -45,6 +46,7 @@ export default function App() {
           <Route path="admin/motoristas" element={<AdminMotoristas />} />
           <Route path="admin/escalas" element={<AdminEscalas />} />
           <Route path="admin/relatorios" element={<AdminRelatorios />} />
+          <Route path="admin/alunos" element={<AdminAlunos />} />
           {/* <Route path="acesso-negado" element={<AcessoNegado />} /> */}
 
         </Route>

@@ -1,6 +1,5 @@
 import { supabase } from "../../config/supabase.js";
 import * as RotaMotoristaService from "../rotaMotoristas/rotaMotoristas.service.js";
-import { addDays } from "date-fns";
 
 export async function gerarEscalaAutomatica(ano, motoristasIds) {
   const { data: existing } = await supabase
@@ -26,7 +25,7 @@ export async function gerarEscalaAutomatica(ano, motoristasIds) {
 
   const inserts = [];
 
-  for (let mes = 1; mes <= 12; mes++) {
+    for (let mes = 1; mes <= 12; mes++) {
     const parIndex = (mes - 1) % pares.length;
     const par = pares[parIndex];
     inserts.push({
@@ -37,7 +36,7 @@ export async function gerarEscalaAutomatica(ano, motoristasIds) {
       status: "ativo",
     });
 
-    await vincularMotoristasNasRotas(ano, mes, par[0], par[1]);
+    await vincularMotoristasNasRotas(ano, mes, par);
   }
 
   const { error } = await supabase.from("escalas").insert(inserts);
@@ -63,7 +62,7 @@ export async function gerarEscalaManual(ano, pares) {
       status: "ativo",
     });
 
-    await vincularMotoristasNasRotas(ano, mes, par[0], par[1]);
+    await vincularMotoristasNasRotas(ano, mes, par);
   }
 
   const { error } = await supabase.from("escalas").insert(inserts);
@@ -88,47 +87,52 @@ export async function desativarEscala(ano, mes) {
   };
 }
 
-async function vincularMotoristasNasRotas(ano, mes, motorista1, motorista2) {
-  const { data: rotas, error: rotaError } = await supabase
-    .from("rotas")
-    .select("id")
-    .limit(2);
+async function vincularMotoristasNasRotas(ano, mes, motoristasIds, options = {}) {
+  const weeksPerMonth = options.weeksPerMonth || 4;
 
-  if (rotaError) throw rotaError;
+  const { data: rotas, error: rotasErr } = await supabase
+    .from('rotas')
+    .select('*')
+    .order('id', { ascending: true });
+  if (rotasErr) throw rotasErr;
+  if (!rotas || rotas.length === 0) throw new Error('Nenhuma rota encontrada para vinculação.');
 
-  if (!rotas || rotas.length < 2) {
-    throw new Error("É necessário ter pelo menos duas rotas cadastradas.");
+  const pares = [];
+  for (let i = 0; i < motoristasIds.length; i += 2) {
+    pares.push([motoristasIds[i], motoristasIds[i + 1]]);
   }
 
-  const [rota1, rota2] = rotas;
+  const inicioMes = new Date(ano, mes - 1, 1);
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const weekLength = Math.floor(diasNoMes / weeksPerMonth);
+  const weeks = [];
+  let cursor = 1;
+  for (let w = 0; w < weeksPerMonth; w++) {
+    const startDay = cursor;
+    const endDay = (w === weeksPerMonth - 1) ? diasNoMes : Math.min(cursor + weekLength - 1, diasNoMes);
+    weeks.push({
+      inicio: new Date(ano, mes - 1, startDay).toISOString().split('T')[0],
+      fim: new Date(ano, mes - 1, endDay).toISOString().split('T')[0]
+    });
+    cursor = endDay + 1;
+  }
 
-  const inicioMes = new Date(ano, mes - 1, -1);
-
-  for (let semana = 1; semana <= 4; semana++) {
-    const inicio = addDays(inicioMes, (semana - 1) * 7);
-    const fim = addDays(inicio, 6);
-
-    const invertido = semana % 2 === 0;
-
-    const vinculos = invertido
-      ? [
-          { rota_id: rota1.id, motorista_id: motorista2, inicio, fim },
-          { rota_id: rota2.id, motorista_id: motorista1, inicio, fim },
-        ]
-      : [
-          { rota_id: rota1.id, motorista_id: motorista1, inicio, fim },
-          { rota_id: rota2.id, motorista_id: motorista2, inicio, fim },
-        ];
-
-    for (const vinculo of vinculos) {
-      await RotaMotoristaService.atribuirMotorista(
-        vinculo.rota_id,
-        vinculo.motorista_id,
-        vinculo.inicio,
-        vinculo.fim
-      );
+  const promises = [];
+  let pairIndex = 0;
+  for (let p = 0; p < pares.length; p++) {
+    const par = pares[p];
+    for (let w = 0; w < weeks.length; w++) {
+      const week = weeks[w];
+      for (let r = 0; r < rotas.length; r++) {
+                const pick = ((w + r) % 2 === 0) ? par[0] : par[1];
+                promises.push(RotaMotoristaService.atribuirMotorista(rotas[r].id, pick, week.inicio, week.fim));
+      }
     }
+    pairIndex = (pairIndex + 1) % pares.length;
   }
+
+  const results = await Promise.all(promises);
+  return { message: 'Motoristas vinculados nas rotas com sucesso', results };
 }
 
 
@@ -210,7 +214,6 @@ export async function listarEscalasAnoComSemanas(ano) {
     .order("mes", { ascending: true });
   if (error) throw error;
 
-  // Para cada mês, monta as 4 semanas já invertendo os motoristas conforme a lógica
   return (data || []).map((escala) => ({
     ...escala,
     semanas: [1, 2, 3, 4].map((semana) => {
@@ -241,7 +244,7 @@ export async function listarEscalasAno(ano) {
 }
 
 export async function resetEscalasAno(ano) {
-  // Busca todas as escalas do ano informado
+
   const { data: escalas, error: fetchError } = await supabase
     .from("escalas")
     .select("id, motorista1_id, motorista2_id")
@@ -253,7 +256,6 @@ export async function resetEscalasAno(ano) {
     return { message: `Nenhuma escala encontrada para o ano ${ano}.` };
   }
 
-  // Deleta vínculos em rota_motoristas (que envolvam motoristas dessa escala)
   const motoristaIds = [
     ...new Set(
       escalas.flatMap((e) => [e.motorista1_id, e.motorista2_id]).filter(Boolean)
@@ -269,7 +271,6 @@ export async function resetEscalasAno(ano) {
     if (delVinculosError) throw delVinculosError;
   }
 
-  // Deleta as escalas do ano
   const { error: delEscalasError } = await supabase
     .from("escalas")
     .delete()

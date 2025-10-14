@@ -3,12 +3,35 @@ import { supabase } from '../../config/supabase.js';
 import { ensureViagem } from '../viagens/viagens.service.js';
 import { formatHHMM } from '../../utils/functions.js';
 
+async function ensureCarteirinhaValidaOuAtualizaStatus(alunoUsuarioId) {
+    const hoje = new Date().toISOString().split('T')[0];
+    const { data: carteirinha, error: carteirinhaErr } = await supabase
+        .from('carteirinhas')
+        .select('id, data_validade')
+        .eq('aluno_id', alunoUsuarioId)
+        .gte('data_validade', hoje)
+        .order('data_validade', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+    if (carteirinhaErr) throw carteirinhaErr;
+
+    if (!carteirinha) {
+        const { error: updErr } = await supabase
+            .from('alunos')
+            .update({ status_cadastro: 'reprovado' })
+            .eq('usuario_id', alunoUsuarioId);
+        if (updErr) throw updErr;
+        throw new Error('Carteirinha inválida/expirada. Aluno marcado como reprovado.');
+    }
+}
+
 export async function listarPresencasPorRota(rotaId, data) {
     const filtroData = data || new Date().toISOString().split('T')[0];
 
     const { data: presencas, error } = await supabase
         .from('presencas')
-        .select('*, alunos(nome), rotas(nome)')
+        .select('*, alunos(usuario_id, usuarios(nome)), rotas(nome)')
         .eq('rota_id', rotaId)
         .eq('data', filtroData)
         .eq('status', 'ativo');
@@ -42,6 +65,7 @@ export async function desativarPresenca(presencaId) {
 }
 
 export async function marcarPresenca(alunoId, rotaId) {
+    await ensureCarteirinhaValidaOuAtualizaStatus(alunoId);
     const hoje = new Date().toISOString().split('T')[0];
     const viagem = await ensureViagem(rotaId, hoje);
 
@@ -106,6 +130,7 @@ export async function marcarPresenca(alunoId, rotaId) {
 }
 
 export async function confirmarPresencaIdaQrCode(alunoId) {
+
     const hoje = new Date().toISOString().split('T')[0];
 
     const agora = new Date();
@@ -165,6 +190,7 @@ export async function confirmarPresencaIdaQrCode(alunoId) {
 }
 
 export async function confirmarPresencaVoltaQrCode(alunoId) {
+
     const hoje = new Date().toISOString().split('T')[0];
     const agora = new Date();
 
@@ -197,15 +223,50 @@ export async function confirmarPresencaVoltaQrCode(alunoId) {
         .from('presencas')
         .select('*')
         .eq('aluno_id', alunoId)
-        .eq('rota_id', rotaId)
         .eq('data', hoje)
         .maybeSingle();
 
     if (error) throw error;
 
-    if(!existing) throw new Error("Aluno confirmou embarque na ida.");
+    if(!existing) {
+        try {
+            const { data: alunoData, error: alunoErr } = await supabase
+                .from('alunos')
+                .select('curso_id, cursos(faculdade_id)')
+                .eq('usuario_id', alunoId)
+                .maybeSingle();
 
-    if(!existing.confirmado_qrcode) throw new Error("Aluno não embarcou na ida.");
+            if (!alunoErr && alunoData?.cursos?.faculdade_id) {
+                const { data: rotaIdObj, error: rotaErr } = await supabase
+                    .from('rota_faculdades')
+                    .select('rota_id')
+                    .eq('faculdade_id', alunoData.cursos.faculdade_id)
+                    .eq('status', 'ativo')
+                    .maybeSingle();
+
+                if (!rotaErr && rotaIdObj?.rota_id) {
+                    const rotaId = rotaIdObj.rota_id;
+                    const { data: existingByRota, error: errByRota } = await supabase
+                        .from('presencas')
+                        .select('*')
+                        .eq('aluno_id', alunoId)
+                        .eq('rota_id', rotaId)
+                        .eq('data', hoje)
+                        .maybeSingle();
+
+                    if (!errByRota && existingByRota) {
+                        existing = existingByRota;
+                    }
+                }
+            }
+        } catch (fallbackErr) {
+            console.warn('debug: erro ao tentar inferir rota para confirmar volta:', fallbackErr);
+        }
+    }
+
+    if(!existing) throw new Error("Aluno não marcou presença na ida.");
+
+    if(!existing.confirmado_qrcode) throw new Error("Aluno não confirmou embarque na ida (via QR Code).");
 
     if(existing.confirmado_volta) throw new Error("Aluno já confirmou volta via QR Code");
 

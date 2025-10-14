@@ -13,7 +13,7 @@ const PontoSelectionModal = ({ alunoId, onClose, onSaved }) => {
   const fetchPontos = useCallback(async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/pontos?status=ativo"); // precisa existir no backend
+      const { data } = await api.get("/pontos?status=ativo");
       setPontos(data || []);
     } catch (error) {
       const msg =
@@ -34,7 +34,7 @@ const PontoSelectionModal = ({ alunoId, onClose, onSaved }) => {
       setSaving(true);
       await api.post("/aluno-pontos/vincular", { alunoId, pontoId: selected });
       showToast("success", "Ponto de embarque salvo com sucesso!");
-      onSaved(); // callback pra atualizar dashboard
+      onSaved();
       onClose();
     } catch {
       showToast("error", "Erro ao salvar ponto.");

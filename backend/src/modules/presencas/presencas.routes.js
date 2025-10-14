@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import * as PresencaController from "./presencas.controller.js";
+import checkCarteirinha from '../../middleware/checkCarteirinha.js';
 import { validate } from "../../middleware/validate.js";
 import * as PresencaSchema from "./presencas.schema.js";
 
@@ -32,6 +33,7 @@ router.delete(
 router.post(
   "/marcar-presenca",
   requireAuth,
+  checkCarteirinha,
   PresencaController.marcarPresencaController
 );
 /**
@@ -85,3 +87,4 @@ router.post(
 );
 
 export default router;
+

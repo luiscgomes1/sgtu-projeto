@@ -40,7 +40,7 @@ export async function detalharViagem(viagemId) {
             rotas(nome),
             presencas(
                 id, confirmado, confirmado_qrcode,
-                alunos(usuario_id, nome)
+                alunos(usuario_id, usuarios(nome))
             )
         `)
         .eq('id', viagemId)
@@ -53,7 +53,7 @@ export async function detalharViagem(viagemId) {
 export async function listarAlunosNaViagem(data) {
     let query = supabase
         .from('presencas')
-        .select('*, alunos(nome, curso_id, cursos(faculdades(nome))), rotas(nome)')
+        .select('*, alunos(usuario_id, usuarios(nome), curso_id, cursos(faculdades(nome))), rotas(nome)')
         .eq('data', data)
         .eq('status', 'ativo');
 
@@ -61,18 +61,35 @@ export async function listarAlunosNaViagem(data) {
 
     if(error) throw error;
 
+    if (process.env.NODE_ENV === 'development') {
+        try {
+            console.log('[debug] listarAlunosNaViagem - presencas count:', Array.isArray(presencas) ? presencas.length : 0);
+            if (Array.isArray(presencas) && presencas.length > 0) {
+                const sample = presencas.slice(0, 5).map(p => ({
+                    rota: p?.rotas?.nome,
+                    aluno_usuario_id: p?.alunos?.usuario_id,
+                    aluno_nome: p?.alunos?.usuarios?.nome,
+                    curso: p?.alunos?.curso_id
+                }));
+                console.log('[debug] listarAlunosNaViagem - sample:', JSON.stringify(sample, null, 2));
+            }
+        } catch (e) {
+            console.warn('[debug] listarAlunosNaViagem - erro ao logar presencas:', e);
+        }
+    }
+
     const agrupado = {};
 
     for (const p of presencas) {
-        const rota = p.rotas.nome;
-        const faculdade = p.alunos.cursos?.faculdades?.nome;
-        if (!agrupado[rota]) agrupado[rota] = [];
+        const rota = p?.rotas?.nome || 'Rota desconhecida';
+        const faculdade = p?.alunos?.cursos?.faculdades?.nome || 'Geral';
+        const nomeAluno = p?.alunos?.usuarios?.nome || null;
+
+        if (!nomeAluno) continue;
+
+        if (!agrupado[rota]) agrupado[rota] = {};
         if (!agrupado[rota][faculdade]) agrupado[rota][faculdade] = [];
-        agrupado[rota][faculdade].push((
-            {nome: p.alunos.nome,
-            faculdade
-            }
-        ));
+        agrupado[rota][faculdade].push({ nome: nomeAluno, faculdade });
     }
 
     return agrupado;
@@ -113,7 +130,7 @@ export async function listarStatusVolta() {
             nome: p.alunos?.usuarios?.nome,
             telefone: p.alunos?.telefone,
             faculdade: p.alunos?.cursos?.faculdades?.nome,
-            confirmado_volta: p.confirmado_volta
+            confirmadoVolta: !!p.confirmado_volta
         };
 
         if (!resumo[rotaNome]) {

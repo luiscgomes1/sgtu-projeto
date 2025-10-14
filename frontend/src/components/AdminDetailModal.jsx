@@ -21,6 +21,7 @@ export default function AdminDetailModal({
   onCancel,
   editMode,
   setEditMode,
+  allowEdit = true,
 }) {
   const [showDiscardModal, setShowDiscardModal] = useState(false);
 
@@ -94,6 +95,23 @@ export default function AdminDetailModal({
         </div>
       );
     } else {
+      if (!allowEdit) {
+        return (
+          <button
+            onClick={onToggleStatus}
+            disabled={isProcessing}
+            className={`w-full py-2 rounded-lg font-semibold transition flex items-center justify-center gap-2 ${
+              currentStatus === "ATIVO"
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-green-500 hover:bg-green-600"
+            } text-white disabled:opacity-50`}
+          >
+            {currentStatus === "ATIVO" ? <FaToggleOff /> : <FaToggleOn />}
+            {currentStatus === "ATIVO" ? "Desativar" : "Ativar"}
+          </button>
+        );
+      }
+
       return (
         <>
           <button

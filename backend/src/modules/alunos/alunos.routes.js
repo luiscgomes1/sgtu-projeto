@@ -19,6 +19,18 @@ router.get(
   requireRole("admin"),
   AlunoController.listAlunosPaginatedController
 );
+router.get(
+  "/estatisticas",
+  requireAuth,
+  requireRole("admin"),
+  AlunoController.obterEstatisticasController
+);
+router.get(
+  "/counts",
+  requireAuth,
+  requireRole("admin"),
+  AlunoController.obterContagensController
+);
 router.get("/me", requireAuth, AlunoController.obterMeuPerfilController);
 /**
  * @swagger
