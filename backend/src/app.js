@@ -10,6 +10,14 @@ import { notFound, errorHandler } from './middleware/error.js';
 import { generalLimiter } from './middleware/rateLimit.js';
 import "./bot/bot.js";
 
+process.on('unhandledRejection', (reason, p) => {
+  console.error('Unhandled Rejection at:', p, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception thrown:', err);
+});
+
 const app = express();
 
 app.use(helmet());
@@ -19,9 +27,9 @@ app.use(cookieParser());
 
 const allowedOrigins = 
   process.env.NODE_ENV === 'production'
-    ? ['https://seu-dominio.com'] // Substitua pelo seu domínio de produção
+    ? ['https://seu-dominio.com'] 
     : ['http://localhost:5173', 'http://localhost:4000'];
-// Middlewares globais
+    
 app.use(
   cors({
     origin: allowedOrigins,

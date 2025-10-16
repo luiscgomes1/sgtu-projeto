@@ -33,7 +33,6 @@ export default function AdminRequestDetail() {
   const [carteirinha, setCarteirinha] = useState(null);
   const { showToast } = useToast();
 
-  // Mapeamento de Status para Cores e Ícones (Melhorado)
   const STATUS_MAP = {
     aprovado: { label: "Aprovado", color: "bg-green-600", icon: FaCheckCircle },
     pendente: { label: "Pendente", color: "bg-yellow-600", icon: FaClock },
@@ -130,12 +129,10 @@ export default function AdminRequestDetail() {
 
   if (loading) return <GlobalLoader />;
 
-  // Renderiza a seção de dados do usuário e acadêmicos
-  // VERSÃO FINAL: Garante o espaçamento com "label: "
   const renderDetailItem = (icon, label, value) => (
     <div className="flex items-center text-gray-700">
       {icon}
-      {/* Usamos o texto formatado no <span> para garantir o espaço */}
+
       <span className="font-semibold ml-1">{label}: </span>
       <span className="break-words ml-1">{value || "N/A"}</span>
     </div>
@@ -151,9 +148,6 @@ export default function AdminRequestDetail() {
             : `Revisão de Cadastro: ${request.nome}`}
         </h2>
 
-        {/* ========================================= */}
-        {/* STATUS BAR (Destacado) */}
-        {/* ========================================= */}
         <div
           className={`p-4 rounded-lg shadow-md mb-6 flex items-center justify-between text-white ${statusInfo.color}`}
         >
@@ -233,7 +227,6 @@ export default function AdminRequestDetail() {
             </h3>
 
             <ul className="space-y-3 p-3 border rounded-lg bg-gray-50">
-              {/* Item Documento (Reutilizável) */}
               {request.comprovante_residencia_url && (
                 <li className="flex justify-between items-center">
                   <span>Comprovante de Residência</span>
@@ -291,7 +284,7 @@ export default function AdminRequestDetail() {
             {/* ========================================= */}
             {request.status === "pendente" && (
               <div className="flex flex-col gap-3 mt-8">
-                {/* BOTÃO DE CARTEIRINHA (NOVO) */}
+                {/* BOTÃO DE CARTEIRINHA */}
 
                 {isPendingAnalysis && (
                   <>

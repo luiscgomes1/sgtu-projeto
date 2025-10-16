@@ -90,8 +90,8 @@ export default function Layout() {
             <NavItem to="/admin/faculdades" icon={<FaBuilding />} text="Faculdades" />
             <NavItem to="/admin/cursos" icon={<FaGraduationCap />} text="Cursos" />
             <NavItem to="/admin/pontos" icon={<FaBusAlt />} text="Pontos" />
-            <NavItem to="/admin/escalas" icon={<FaClipboardList />} text="Escalas" />
             <NavItem to="/admin/motoristas" icon={<FaUsers />} text="Motoristas" />
+            <NavItem to="/admin/escalas" icon={<FaClipboardList />} text="Escalas" />
             <NavItem to="/admin/relatorios" icon={<FaClipboardList />} text="Relatórios" />
           </aside>
         )}
@@ -140,8 +140,8 @@ export default function Layout() {
                     <NavItem to="/admin/faculdades" icon={<FaBuilding />} text="Faculdades" />
                     <NavItem to="/admin/cursos" icon={<FaGraduationCap />} text="Cursos" />
                     <NavItem to="/admin/pontos" icon={<FaBusAlt />} text="Pontos" />
-                    <NavItem to="/admin/escalas" icon={<FaClipboardList />} text="Escalas" />
                     <NavItem to="/admin/motoristas" icon={<FaUsers />} text="Motoristas" />
+                    <NavItem to="/admin/escalas" icon={<FaClipboardList />} text="Escalas" />
                     <NavItem to="/admin/relatorios" icon={<FaClipboardList />} text="Relatórios" />
                   </div>
                 )}

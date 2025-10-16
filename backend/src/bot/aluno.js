@@ -10,8 +10,6 @@ export function setupAlunoBot(bot) {
         const email = parts[1];
         const senha = parts.slice(2).join(" ");
 
-        console.log(`Tentando login para ${email}`);
-        console.log(`Senha recebida: ${senha}`);
         try {
             const response = await api.post('/auth/login', {
                 email,
@@ -22,7 +20,6 @@ export function setupAlunoBot(bot) {
         );
 
             const data = response.data;
-            console.log(data);
 
             setSession(ctx.from.id, { 
                 token: data.token, 
@@ -51,7 +48,6 @@ export function setupAlunoBot(bot) {
 
             
             const carteirinha = data[0];
-            console.log(carteirinha);
 
             ctx.reply(`🎫 Sua carteirinha é válida até: ${formatDate(carteirinha.data_validade)}`);
         } catch (err) {
@@ -74,7 +70,6 @@ export function setupAlunoBot(bot) {
             ctx.reply(`✅ Presença marcada com sucesso para hoje: ${data?.message || 'OK'}`);
         } catch (error) {
             console.error('Erro ao marcar presenca via bot:', error.response?.status, error.response?.data || error.message);
-            // Extrai mensagem amigável retornada pelo servidor (se disponível)
             const serverMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Erro interno.';
             ctx.reply(`⚠️ Erro ao registrar presença: ${serverMsg}`);
         }
