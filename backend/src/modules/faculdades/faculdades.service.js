@@ -1,96 +1,94 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from '../../config/prisma.js'
+import { paginate, paginatedResponse } from '../../utils/pagination.js'
 
 export async function createFaculdade(payload) {
-  const existing = await supabase
-    .from("faculdades")
-    .select("*")
-    .or(`nome.eq.${payload.nome},endereco.eq.${payload.endereco}`)
-    .maybeSingle();
+  
+  const existing = await prisma.faculdade.findFirst({
+    where: {
+      OR: [
+        { nome: payload.nome },
+        { endereco: payload.endereco }
+      ]
+    }
+  })
 
-  if (existing.data) {
-    if (existing.data.nome === payload.nome) {
-      throw new Error("Já existe uma faculdade com esse nome.");
+  if (existing) {
+    if (existing.nome === payload.nome) {
+      throw new Error("Já existe uma faculdade com esse nome.")
     }
-    if (existing.data.endereco === payload.endereco) {
-      throw new Error("Já existe uma faculdade com esse endereço.");
+    if (existing.endereco === payload.endereco) {
+      throw new Error("Já existe uma faculdade com esse endereço.")
     }
-    throw new Error("Faculdade já cadastrada.");
+    throw new Error("Faculdade já cadastrada.")
   }
 
-  const { data, error } = await supabase
-    .from("faculdades")
-    .insert([
-      {
-        nome: payload.nome,
-        endereco: payload.endereco,
-      },
-    ])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const faculdade = await prisma.faculdade.create({
+    data: {
+      nome: payload.nome,
+      endereco: payload.endereco,
+    },
+  })
+  
+  return faculdade
 }
 
-export async function listFaculdades({ incluirInativas = false } = {}) {
-  let query = supabase
-    .from("faculdades")
-    .select("*")
-    .order("nome", { ascending: true });
-
-  if (incluirInativas) {
-    query = query.eq("status", "ativo");
+export async function listFaculdades({ incluirInativas = false, naoVinculadas = false } = {}) {
+  const where = incluirInativas ? {} : { status: 'ativo' };
+  if (naoVinculadas) {
+    where.rotaFaculdades = { none: { status: 'ativo' } };
   }
+  const faculdades = await prisma.faculdade.findMany({
+    where,
+    orderBy: { nome: 'asc' },
+  })
+  
+  return faculdades
+}
 
-  const { data, error } = await query;
+export async function listFaculdadesPaginated({ page = 1, limit = 20, search = '', status = '' }) {
+    const { skip, take } = paginate({ page, limit });
+    const where = {};
+    if (status) where.status = status;
+    if (search) where.nome = { contains: search, mode: 'insensitive' };
 
-  if (error) throw error;
-  return data;
+    const [data, total] = await Promise.all([
+        prisma.faculdade.findMany({ where, skip, take, orderBy: { nome: 'asc' } }),
+        prisma.faculdade.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, { page, limit });
 }
 
 export async function updateFaculdade(id, payload) {
-  const { data, error } = await supabase
-    .from("faculdades")
-    .update(payload)
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const faculdade = await prisma.faculdade.update({
+    where: { id },
+    data: payload
+  })
+  
+  return faculdade
 }
 
 export async function setFaculdadeStatus(id, status) {
-  const { data, error } = await supabase
-    .from("faculdades")
-    .update({ status })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data;
+  const faculdade = await prisma.faculdade.update({
+    where: { id },
+    data: { status }
+  })
+  
+  return faculdade
 }
 
 export async function getFaculdadeById(id) {
-  const { data, error } = await supabase
-    .from("faculdades")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const faculdade = await prisma.faculdade.findUnique({
+    where: { id }
+  })
 
-  if (error) throw error;
-  return data;
+  return faculdade
 }
 
 export async function getFaculdadeByName(nome) {
-  const { data, error } = await supabase
-    .from("faculdades")
-    .select("*")
-    .eq("nome", nome)
-    .single()
-    .maybeSingle();
-
-  if (error) throw error;
-  return data;
+  const faculdade = await prisma.faculdade.findFirst({
+    where: { nome }
+  })
+  
+  return faculdade
 }

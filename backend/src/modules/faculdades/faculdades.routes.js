@@ -3,17 +3,10 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import * as FaculdadesController from "./faculdades.controller.js";
 import { validate } from "../../middleware/validate.js";
 import * as FaculdadesSchema from "./faculdades.schema.js";
-import Joi from "joi";
+import { z } from "zod";
 import { sanitizeData } from "../../middleware/sanitize.js";
 
 const router = Router();
-
-/**
- * @swagger
- * tags:
- *   - name: Faculdades
- *     description: Gerenciamento de faculdades
- */
 
 router.post(
   "/",
@@ -23,26 +16,15 @@ router.post(
   validate(FaculdadesSchema.faculdadeCreateSchema),
   FaculdadesController.createFaculdadeController
 );
-/**
- * @swagger
- * /faculdades:
- *   post:
- *     summary: Cria uma faculdade (admin)
- *     tags:
- *       - Faculdades
- *     security:
- *       - bearerAuth: []
- */
 
 router.get("/", FaculdadesController.listFaculdadesController);
-/**
- * @swagger
- * /faculdades:
- *   get:
- *     summary: Lista faculdades
- *     tags:
- *       - Faculdades
- */
+
+router.get(
+  "/paginated",
+  requireAuth,
+  validate(FaculdadesSchema.faculdadeListQuerySchema, 'query'),
+  FaculdadesController.listFaculdadesPaginatedController
+);
 
 router.get(
   "/:id",
@@ -65,7 +47,7 @@ router.patch(
   requireRole("admin"),
   validate(FaculdadesSchema.faculdadeIdParamSchema, "params"),
   validate(
-    Joi.object({ status: Joi.string().valid("ativo", "inativo").required() })
+    z.object({ status: z.enum(["ativo", "inativo"]) })
   ),
   FaculdadesController.setFaculdadeStatusController
 );

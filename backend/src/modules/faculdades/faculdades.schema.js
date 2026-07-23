@@ -1,43 +1,28 @@
-import Joi from "joi";
+import { z } from 'zod';
+import { uuidParam, statusField } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: "uuidv4" }).required().messages({
-  "string.guid": "O ID fornecido não é um UUID válido",
-  "any.required": "O ID é obrigatório",
+export const faculdadeCreateSchema = z.object({
+  nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres'),
+  endereco: z.string().min(5, 'O endereço deve ter pelo menos 5 caracteres').max(200, 'O endereço deve ter no máximo 200 caracteres'),
 });
 
-export const faculdadeCreateSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).required().messages({
-    "string.min": "O nome deve ter pelo menos {#limit} caracteres",
-    "string.max": "O nome deve ter no máximo {#limit} caracteres",
-    "any.required": "O nome é obrigatório",
-  }),
-  endereco: Joi.string().min(5).max(200).required().messages({
-    "string.min": "O endereço deve ter pelo menos {#limit} caracteres",
-    "string.max": "O endereço deve ter no máximo {#limit} caracteres",
-    "any.required": "O endereço é obrigatório",
-  }),
+export const faculdadeUpdateSchema = z.object({
+  nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres').optional(),
+  endereco: z.string().min(5, 'O endereço deve ter pelo menos 5 caracteres').max(200, 'O endereço deve ter no máximo 200 caracteres').optional(),
+  status: statusField.optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'Pelo menos um campo deve ser fornecido para atualização' });
+
+export const faculdadeIdParamSchema = z.object({
+  id: uuidParam,
 });
 
-export const faculdadeUpdateSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).optional().messages({
-    "string.min": "O nome deve ter pelo menos {#limit} caracteres",
-    "string.max": "O nome deve ter no máximo {#limit} caracteres",
-  }),
-  endereco: Joi.string().min(5).max(200).optional().messages({
-    "string.min": "O endereço deve ter pelo menos {#limit} caracteres",
-    "string.max": "O endereço deve ter no máximo {#limit} caracteres",
-  }),
-  status: Joi.string().valid("ativo", "inativo").optional(),
-}).min(1);
-
-export const faculdadeIdParamSchema = Joi.object({
-  id: uuidRegex.label("ID da Faculdade"),
+export const faculdadeListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().default(''),
+  status: z.enum(['ativo', 'inativo', '']).default(''),
 });
 
-export const faculdadeNomeParamsSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).required().messages({
-    "string.min": "O nome deve ter pelo menos {#limit} caracteres",
-    "string.max": "O nome deve ter no máximo {#limit} caracteres",
-    "any.required": "O nome da faculdade é obrigatório",
-  }),
+export const faculdadeNomeParamsSchema = z.object({
+  nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres'),
 });

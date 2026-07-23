@@ -1,0 +1,306 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── Usuários ──
+model Usuario {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome        String
+  email       String   @unique
+  senhaHash   String   @map("senha_hash")
+  tipo        String
+  status      String?  @default("ativo")
+  telegramId  String?  @map("telegram_id")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  aluno              Aluno?
+  carteirinhasEmitidas Carteirinha[]      @relation("CriadoPor")
+  historicoAlterado  CadastroHistorico[]  @relation("AlteradoPor")
+  refreshTokens      RefreshToken[]
+
+  @@map("usuarios")
+}
+
+// ── Faculdades ──
+model Faculdade {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  endereco  String?
+  status    String?  @default("ativo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  cursos         Curso[]
+  rotaFaculdades RotaFaculdade[]
+
+  @@map("faculdades")
+}
+
+// ── Cursos ──
+model Curso {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  faculdadeId String?  @map("faculdade_id") @db.Uuid
+  nome        String
+  status      String?  @default("ativo")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  faculdade Faculdade? @relation(fields: [faculdadeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  alunos    Aluno[]
+
+  @@map("cursos")
+}
+
+// ── Alunos ──
+model Aluno {
+  usuarioId  String @id @map("usuario_id") @db.Uuid
+  cursoId    String? @map("curso_id") @db.Uuid
+  rg         String?
+  cpf        String?
+  telefone   String?
+  dataNascimento DateTime? @map("data_nascimento") @db.Date
+  endereco   String?
+  tipoSanguineo String? @map("tipo_sanguineo")
+  comprovanteResidenciaUrl String? @map("comprovante_residencia_url")
+  comprovanteMatriculaUrl  String? @map("comprovante_matricula_url")
+  fotoUrl    String? @map("foto_url")
+  telegramId String? @map("telegram_id")
+  statusCadastro String? @default("pendente") @map("status_cadastro")
+
+  usuario      Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  curso        Curso?             @relation(fields: [cursoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  carteirinhas Carteirinha[]
+  presencas    Presenca[]
+  alunosPontos AlunoPonto[]
+  historico    CadastroHistorico[]
+
+  @@map("alunos")
+}
+
+// ── Cadastro Histórico (nova) ──
+model CadastroHistorico {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alunoId        String   @map("aluno_id") @db.Uuid
+  statusAnterior String?  @map("status_anterior")
+  statusNovo     String   @map("status_novo")
+  origem         String   @default("admin")
+  alteradoPorId  String?  @map("alterado_por") @db.Uuid
+  motivo         String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  aluno       Aluno    @relation(fields: [alunoId], references: [usuarioId], onDelete: Cascade, onUpdate: NoAction)
+  alteradoPor Usuario? @relation("AlteradoPor", fields: [alteradoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([alunoId, createdAt(sort: Desc)])
+  @@map("cadastro_historico")
+}
+
+// ── Carteirinhas ──
+model Carteirinha {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alunoId      String   @map("aluno_id") @db.Uuid
+  dataEmissao  DateTime @default(now()) @map("data_emissao") @db.Timestamptz(6)
+  dataValidade DateTime @map("data_validade") @db.Date
+  arquivoUrl   String?  @map("arquivo_url")
+  qrcodeToken  String?  @unique @map("qrcode_token")
+  criadoPorId  String?  @map("criado_por") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  aluno   Aluno    @relation(fields: [alunoId], references: [usuarioId], onDelete: Cascade, onUpdate: NoAction)
+  criadoPor Usuario? @relation("CriadoPor", fields: [criadoPorId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([alunoId, dataValidade(sort: Desc)])
+  @@map("carteirinhas")
+}
+
+// ── Refresh Tokens ──
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuarioId String   @map("usuario_id") @db.Uuid
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tokenHash])
+  @@index([usuarioId])
+  @@map("refresh_tokens")
+}
+
+// ── Configurações ──
+model Configuracao {
+  id                 Int      @id @default(autoincrement())
+  horaLimitePresenca DateTime @default(dbgenerated("'15:00:00'::time without time zone")) @map("hora_limite_presenca") @db.Time(6)
+  logoUrl            String?  @map("logo_url")
+  nomeOrganizacao    String?  @map("nome_organizacao")
+
+  @@map("configuracoes")
+}
+
+// ── Motoristas ──
+model Motorista {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome           String
+  cnh            String?
+  telefone       String?
+  status         String?  @default("ativo")
+  dataNascimento DateTime? @map("data_nascimento") @db.Date
+  cpf            String?
+  validadeCnh    DateTime? @map("validade_cnh") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rotaMotoristas    RotaMotorista[]
+  escalaAtribuicoes EscalaAtribuicao[]
+
+  @@map("motoristas")
+}
+
+// ── Pontos ──
+model Ponto {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  endereco  String?
+  status    String?  @default("ativo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  alunosPontos AlunoPonto[]
+  rotaPontos   RotaPonto[]
+
+  @@map("pontos")
+}
+
+// ── AlunoPonto (junção) ──
+model AlunoPonto {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alunoId   String   @map("aluno_id") @db.Uuid
+  pontoId   String   @map("ponto_id") @db.Uuid
+  status    String?  @default("ativo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  aluno Aluno @relation(fields: [alunoId], references: [usuarioId], onDelete: Cascade, onUpdate: NoAction)
+  ponto Ponto @relation(fields: [pontoId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([alunoId, pontoId])
+  @@map("alunos_pontos")
+}
+
+// ── Rotas ──
+model Rota {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  nome      String
+  status    String?  @default("ativo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rotaPontos        RotaPonto[]
+  rotaFaculdades    RotaFaculdade[]
+  rotaMotoristas    RotaMotorista[]
+  escalaAtribuicoes EscalaAtribuicao[]
+  viagens           Viagem[]
+  presencas         Presenca[]
+
+  @@map("rotas")
+}
+
+// ── RotaPonto (junção) ──
+model RotaPonto {
+  rotaId    String   @map("rota_id") @db.Uuid
+  pontoId   String   @map("ponto_id") @db.Uuid
+  ordem     Int?
+  status    String?  @default("ativo")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rota  Rota  @relation(fields: [rotaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ponto Ponto @relation(fields: [pontoId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([rotaId, pontoId])
+  @@map("rota_pontos")
+}
+
+// ── RotaFaculdade (junção) ──
+model RotaFaculdade {
+  rotaId      String @map("rota_id") @db.Uuid
+  faculdadeId String @map("faculdade_id") @db.Uuid
+  status      String? @default("ativo")
+
+  rota      Rota      @relation(fields: [rotaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  faculdade Faculdade @relation(fields: [faculdadeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([rotaId, faculdadeId])
+  @@map("rota_faculdades")
+}
+
+// ── RotaMotorista (vínculo operacional) ──
+model RotaMotorista {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rotaId      String   @map("rota_id") @db.Uuid
+  motoristaId String   @map("motorista_id") @db.Uuid
+  inicio      DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+  fim         DateTime? @db.Date
+  status      String?   @default("ativo")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rota      Rota      @relation(fields: [rotaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  motorista Motorista @relation(fields: [motoristaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("rota_motoristas")
+}
+
+// ── EscalaAtribuicao (planejamento mensal, ADR-005) ──
+model EscalaAtribuicao {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rotaId      String   @map("rota_id") @db.Uuid
+  motoristaId String   @map("motorista_id") @db.Uuid
+  ano         Int
+  mes         Int
+  ordem       Int?
+  status      String?  @default("ativo")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rota      Rota      @relation(fields: [rotaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  motorista Motorista @relation(fields: [motoristaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([rotaId, ano, mes, motoristaId])
+  @@map("escala_atribuicoes")
+}
+
+// ── Viagens ──
+model Viagem {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  rotaId    String   @map("rota_id") @db.Uuid
+  data      DateTime @db.Date
+  status    String?  @default("fechada")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  rota     Rota       @relation(fields: [rotaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  presencas Presenca[]
+
+  @@unique([rotaId, data])
+  @@map("viagens")
+}
+
+// ── Presenças ──
+model Presenca {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  alunoId          String   @map("aluno_id") @db.Uuid
+  rotaId           String   @map("rota_id") @db.Uuid
+  viagemId         String   @map("viagem_id") @db.Uuid
+  data             DateTime @db.Date
+  confirmado       Boolean? @default(false)
+  confirmadoQrcode Boolean? @default(false) @map("confirmado_qrcode")
+  confirmadoVolta  Boolean? @default(false) @map("confirmado_volta")
+  status           String?  @default("ativo")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  aluno  Aluno  @relation(fields: [alunoId], references: [usuarioId], onDelete: NoAction, onUpdate: NoAction)
+  rota   Rota   @relation(fields: [rotaId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  viagem Viagem @relation(fields: [viagemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([alunoId, data])
+  @@index([rotaId, data])
+  @@map("presencas")
+}

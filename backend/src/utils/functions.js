@@ -1,34 +1,11 @@
-function normalizarUsuario(usuario) {
-    return {
-        id: usuario.id,
-        usuario_id: usuario.usuario_id || usuario.usuarios?.id || null,
-        nome: usuario.nome || usuario.usuarios?.nome || null,
-        email: usuario.email || usuario.usuarios?.email || null,
-        tipo: usuario.tipo || usuario.usuarios?.tipo || null,
-        status: usuario.status || usuario.usuarios?.status || null,
-        status_cadastro: usuario.status_cadastro || usuario.alunos?.status_cadastro || null,
-        rg: usuario.rg || null,
-        cpf: usuario.cpf || null,
-        telefone: usuario.telefone || null,
-        data_nascimento: usuario.data_nascimento || null,
-        endereco: usuario.endereco || null,
-        tipo_sanguineo: usuario.tipo_sanguineo || null,
-        curso_id: usuario.curso_id || null,
-        curso_nome: usuario.cursos?.nome || usuario.curso_nome || usuario.alunos?.cursos?.nome || null,
-        faculdade_id: usuario.cursos?.faculdade_id || usuario.faculdade_id || usuario.alunos?.cursos?.faculdade_id || null,
-        faculdade_nome: usuario.cursos?.faculdades?.nome || usuario.faculdade_nome || usuario.alunos?.cursos?.faculdades?.nome || null,
-    }
-}
-
 function formatDate(dateString) {
     if (!dateString) return 'N/A';
     try {
-        // Se for só "YYYY-MM-DD", trata como local
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-            const [year, month, day] = dateString.split('-');
+        const s = String(dateString).slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+            const [year, month, day] = s.split('-');
             return `${day}/${month}/${year}`;
         }
-        // Se for ISO completo, usa o Date normalmente
         const date = new Date(dateString);
         return date.toLocaleDateString('pt-BR');
     } catch (e) {
@@ -93,4 +70,12 @@ function formatHHMM(date) {
 
 const formatNumber = (num) => (num || 0).toLocaleString('pt-BR');
 
-export { normalizarUsuario, formatDate, formatCPF, formatTelefone, drawSeparator, formatNumber, cleanString, cleanNumeric, daysBetween, formatTime, formatHHMM };
+function truncDate(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export { formatDate, formatCPF, formatTelefone, drawSeparator, formatNumber, cleanString, cleanNumeric, daysBetween, formatTime, formatHHMM, truncDate };

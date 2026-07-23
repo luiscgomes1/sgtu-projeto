@@ -1,109 +1,32 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam, dateRegex, statusField } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: 'uuidv4' }).required().messages({
-    'string.guid': 'O ID fornecido não é um UUID válido',
-    'any.required': 'O ID é obrigatório',
+export const motoristaCreateSchema = z.object({
+    nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres'),
+    cpf: z.string().length(11, 'O CPF deve ter 11 dígitos (apenas números).'),
+    data_nascimento: z.string().regex(dateRegex, 'A data de nascimento deve estar no formato YYYY-MM-DD'),
+    telefone: z.string().min(10, 'O telefone deve ter pelo menos 10 dígitos.').max(11, 'O telefone deve ter no máximo 11 dígitos.'),
+    cnh: z.string().min(9, 'A CNH deve ter pelo menos 9 dígitos.').max(11, 'A CNH deve ter no máximo 11 dígitos.'),
+    validade_cnh: z.string().regex(dateRegex, 'A validade da CNH deve estar no formato YYYY-MM-DD'),
 });
 
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+export const motoristaUpdateSchema = z.object({
+    nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres').optional(),
+    cpf: z.string().length(11, 'O CPF deve ter 11 dígitos (apenas números).').optional(),
+    data_nascimento: z.string().regex(dateRegex, 'A data de nascimento deve estar no formato YYYY-MM-DD').optional(),
+    telefone: z.string().min(10, 'O telefone deve ter pelo menos 10 dígitos.').max(11, 'O telefone deve ter no máximo 11 dígitos.').optional(),
+    cnh: z.string().min(9, 'A CNH deve ter pelo menos 9 dígitos.').max(11, 'A CNH deve ter no máximo 11 dígitos.').optional(),
+    validade_cnh: z.string().regex(dateRegex, 'A validade da CNH deve estar no formato YYYY-MM-DD').optional(),
+    status: statusField.optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'Pelo menos um campo deve ser fornecido para atualização' });
 
-export const motoristaCreateSchema = Joi.object({
-    nome: Joi.string()
-        .min(3)
-        .max(100)
-        .required()
-        .messages({
-            'string.min': 'O nome deve ter pelo menos 3 caracteres',
-            'string.max': 'O nome deve ter no máximo 100 caracteres',
-            'any.required': 'O nome é obrigatório',
-        }),
-    cpf: Joi.string()
-        .length(11)
-        .required()
-        .messages({
-            'string.length': 'O CPF deve ter 11 dígitos (apenas números).',
-            'any.required': 'O CPF é obrigatório',
-        }),
-    data_nascimento: Joi.string()
-        .pattern(dateRegex)
-        .required()
-        .messages({
-            'string.pattern.base': 'A data de nascimento deve estar no formato YYYY-MM-DD',
-            'any.required': 'A data de nascimento é obrigatória',
-        }),
-    telefone: Joi.string()
-        .min(10)
-        .max(11)
-        .required()
-        .messages({
-            'string.min': 'O telefone deve ter pelo menos 10 dígitos.',
-            'string.max': 'O telefone deve ter no máximo 11 dígitos.',
-            'any.required': 'O telefone é obrigatório.',
-        }),
-    cnh: Joi.string()
-        .min(9)
-        .max(11)
-        .required()
-        .messages({
-            'string.min': 'A CNH deve ter pelo menos 9 dígitos.',
-            'string.max': 'A CNH deve ter no máximo 11 dígitos.',
-            'any.required': 'A CNH é obrigatória.',
-        }),
-    validade_cnh: Joi.string()
-        .pattern(dateRegex)
-        .required()
-        .messages({
-            'string.pattern.base': 'A validade da CNH deve estar no formato YYYY-MM-DD',
-            'any.required': 'A validade da CNH é obrigatória',
-        }),
+export const motoristaListQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    search: z.string().default(''),
+    status: z.enum(['ativo', 'inativo', '']).default(''),
 });
 
-export const motoristaUpdateSchema = Joi.object({
-    nome: Joi.string()
-        .min(3)
-        .max(100)
-        .optional()
-        .messages({
-            'string.min': 'O nome deve ter pelo menos 3 caracteres',
-            'string.max': 'O nome deve ter no máximo 100 caracteres',
-        }),
-    cpf: Joi.string()
-        .length(11)
-        .optional()
-        .messages({
-            'string.length': 'O CPF deve ter 11 dígitos (apenas números).',
-        }),
-    data_nascimento: Joi.string()
-        .pattern(dateRegex)
-        .optional()
-        .messages({
-            'string.pattern.base': 'A data de nascimento deve estar no formato YYYY-MM-DD',
-        }),
-    telefone: Joi.string()
-        .min(10)
-        .max(11)
-        .optional()
-        .messages({
-            'string.min': 'O telefone deve ter pelo menos 10 dígitos.',
-            'string.max': 'O telefone deve ter no máximo 11 dígitos.',
-        }),
-    cnh: Joi.string()
-        .min(9)
-        .max(11)
-        .optional()
-        .messages({
-            'string.min': 'A CNH deve ter pelo menos 9 dígitos.',
-            'string.max': 'A CNH deve ter no máximo 11 dígitos.',
-        }),
-    validade_cnh: Joi.string()
-        .pattern(dateRegex)
-        .optional()
-        .messages({
-            'string.pattern.base': 'A validade da CNH deve estar no formato YYYY-MM-DD',
-        }),
-    status: Joi.string().valid('ativo', 'inativo').optional(),
-}).min(1);
-
-export const motoristaIdParamsSchema = Joi.object({
-    id: uuidRegex.label('ID do Motorista'),
+export const motoristaIdParamsSchema = z.object({
+    id: uuidParam,
 });

@@ -1,31 +1,57 @@
 import * as AuthService from "./auth.service.js";
-import { normalizarUsuario } from "../../utils/functions.js";
+import { refreshAccessToken, revokeRefreshToken } from "./refreshToken.service.js";
+import { ok } from "../../utils/response.js";
 
-const COOKIE_MAX_AGE = 8 * 60 * 60 * 1000; // 8 horas
-const BOT_CLIENT_HEADER = process.env.BOT_CLIENT_HEADER;
+const COOKIE_MAX_AGE = 8 * 60 * 60 * 1000;
+const BOT_CLIENT_HEADER = (process.env.BOT_CLIENT_HEADER || 'x-bot-client').toLowerCase();
 
 export async function loginController(req, res, next) {
-  try {
     const { email, senha } = req.body;
 
-    const { token, user } = await AuthService.login({ email, senha });
+    const { accessToken, refreshToken, expiresAt, user } = await AuthService.login({ email, senha });
 
-    const isBotClient =
-      req.headers[BOT_CLIENT_HEADER.toLocaleLowerCase()] === "true";
+    const isBotClient = req.headers[BOT_CLIENT_HEADER] === "true";
 
     if (isBotClient) {
-      return res.json({ token, user: normalizarUsuario(user) });
-    } else {
-      res.cookie("jwt", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-        maxAge: COOKIE_MAX_AGE,
-      });
-
-      res.json({ user: normalizarUsuario(user) });
+      return ok(res, { accessToken, refreshToken, expiresAt, user });
     }
-  } catch (error) {
-    next(error);
-  }
+
+    res.cookie("jwt", accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: COOKIE_MAX_AGE,
+    });
+
+    ok(res, { user, accessToken, refreshToken, expiresAt });
+}
+
+export async function refreshController(req, res, next) {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token é obrigatório' });
+    }
+
+    const tokens = await refreshAccessToken(refreshToken);
+
+    res.cookie("jwt", tokens.accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
+      maxAge: COOKIE_MAX_AGE,
+    });
+
+    ok(res, { accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresAt: tokens.expiresAt });
+}
+
+export async function logoutController(req, res, next) {
+    const { refreshToken } = req.body;
+
+    if (refreshToken) {
+      await revokeRefreshToken(refreshToken);
+    }
+
+    res.clearCookie("jwt");
+    ok(res, { message: 'Sessão encerrada' });
 }

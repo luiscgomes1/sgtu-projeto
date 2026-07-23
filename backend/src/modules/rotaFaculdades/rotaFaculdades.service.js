@@ -1,65 +1,53 @@
-import { supabase } from '../../config/supabase.js';
+import { prisma } from '../../config/prisma.js';
 
 export async function vincularFaculdade(rotaId, faculdadeId) {
-    const { data: existing } = await supabase
-        .from('rota_faculdades')
-        .select('*')
-        .eq('rota_id', rotaId)
-        .eq('faculdade_id', faculdadeId)
-        .single()
-        .maybeSingle();
+    const existing = await prisma.rotaFaculdade.findUnique({
+      where: { rotaId_faculdadeId: { rotaId, faculdadeId } },
+    });
 
     if (existing) {
-        await supabase
-            .from('rota_faculdades')
-            .update({ status: 'ativo' })
-            .eq("rota_id", rotaId)
-            .eq('faculdade_id', faculdadeId);
+        await prisma.rotaFaculdade.update({
+          where: { rotaId_faculdadeId: { rotaId, faculdadeId } },
+          data: { status: "ativo" },
+        });
         return { message: 'Faculdade já vinculada. Status atualizado para ativo.' };
     }
 
-    const { error } = await supabase
-        .from('rota_faculdades')
-        .insert([{ rota_id: rotaId, faculdade_id: faculdadeId }]);
-
-    if (error) throw error;
-    return { message: 'Faculdade vinculada com sucesso.' };    
+    await prisma.rotaFaculdade.create({
+      data: { rotaId, faculdadeId },
+    });
+    return { message: 'Faculdade vinculada com sucesso.' };
 }
 
 export async function desvincularFaculdade(rotaId, faculdadeId) {
-    const { error } = await supabase
-        .from('rota_faculdades')
-        .update({ status: 'inativo' })
-        .eq("rota_id", rotaId)
-        .eq('faculdade_id', faculdadeId);
-    if (error) throw error;
+    await prisma.rotaFaculdade.update({
+      where: { rotaId_faculdadeId: { rotaId, faculdadeId } },
+      data: { status: "inativo" },
+    });
     return { message: 'Faculdade desvinculada com sucesso.' };
 }
 
 export async function obterRotaPorFaculdade(faculdadeId) {
-    const { data, error } = await supabase
-        .from('rota_faculdades')
-        .select('rota_id')
-        .eq('faculdade_id', faculdadeId)
-        .eq('status', 'ativo')
-        .single();
-
-    if (error) throw error;
-    return data.rota_id;
+    const data = await prisma.rotaFaculdade.findFirst({
+      where: { faculdadeId, status: "ativo" },
+      select: { rotaId: true },
+    });
+    return data?.rotaId ?? null;
 }
 
 export async function listarFaculdadesDaRota(rotaId) {
-    const { data, error } = await supabase
-        .from('rota_faculdades')
-        .select('faculdade_id, status, faculdades(nome), rotas(id, nome)')
-        .eq('rota_id', rotaId)
-        .eq('status', 'ativo');
-    if (error) throw error;
-    return data.map(faculdade => ({
-        id: faculdade.faculdade_id,
-        nome: faculdade.faculdades.nome,
-        status: faculdade.status,
-        rota: faculdade.rotas.nome,
+    const data = await prisma.rotaFaculdade.findMany({
+      where: { rotaId, status: "ativo" },
+      include: {
+        faculdade: { select: { nome: true } },
+        rota: { select: { nome: true } },
+      },
+    });
+    return data.map(f => ({
+        id: f.faculdadeId,
+        nome: f.faculdade.nome,
+        status: f.status,
+        rota: f.rota.nome,
         rotaId: rotaId
     }));
 }

@@ -1,9 +1,14 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from "../../config/prisma.js";
 import bcrypt from "bcryptjs";
+import { getSignedUrl } from "../../config/storage.js";
+import { notifySignupApproved, notifySignupReproved, notifyReenvioApproved } from "../../bot/notifications.js";
+import { logger } from "../../config/logger.js";
+import { truncDate } from "../../utils/functions.js";
 import {
   gerarCarteirinha,
   listarCarteirinhas,
 } from "../carteirinhas/carteirinhas.service.js";
+import { INCLUDE_CURSO_NOME, INCLUDE_USUARIO_NOME } from "../../shared/includes.js";
 
 export async function createSignupRequest(payload) {
   const telefone = payload.telefone
@@ -11,259 +16,288 @@ export async function createSignupRequest(payload) {
     : null;
   const cpf = payload.cpf ? payload.cpf.replace(/\D/g, "") : null;
 
-  const senha_hash = await bcrypt.hash(payload.senha, 10);
-  const signup = {
-    nome: payload.nome,
-    email: payload.email,
-    senha_hash,
-    rg: payload.rg || null,
-    cpf: cpf,
-    telefone: telefone,
-    data_nascimento: payload.data_nascimento || null,
-    endereco: payload.endereco || null,
-    tipo_sanguineo: payload.tipo_sanguineo || null,
-    curso_id: payload.curso_id || null,
-    comprovante_residencia_url: payload.comprovante_residencia_url || null,
-    comprovante_matricula_url: payload.comprovante_matricula_url || null,
-    foto_url: payload.foto_url || null,
-  };
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .insert(signup)
-    .select()
-    .single();
-  if (error) throw error;
-  return data;
+  const senhaHash = await bcrypt.hash(payload.senha, 10);
+
+  const usuario = await prisma.usuario.create({
+    data: {
+      nome: payload.nome,
+      email: payload.email,
+      senhaHash,
+      tipo: "aluno",
+      status: "ativo",
+      aluno: {
+        create: {
+          rg: payload.rg || null,
+          cpf: cpf,
+          telefone: telefone,
+          dataNascimento: payload.data_nascimento
+            ? new Date(payload.data_nascimento)
+            : null,
+          endereco: payload.endereco || null,
+          tipoSanguineo: payload.tipo_sanguineo || null,
+          cursoId: payload.curso_id || null,
+          comprovanteResidenciaUrl: payload.comprovante_residencia_url || null,
+          comprovanteMatriculaUrl: payload.comprovante_matricula_url || null,
+          fotoUrl: payload.foto_url || null,
+          statusCadastro: "pendente",
+        },
+      },
+    },
+    include: {
+      aluno: true,
+    },
+  });
+
+  return usuario;
 }
 
 export async function updateSignupRequest(requestId, payload) {
-  const { comprovante_matricula_url, comprovante_residencia_url, foto_url } =
+  const { comprovante_matricula_url, comprovante_residencia_url, foto_url, status } =
     payload;
 
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .update({
-      comprovante_matricula_url,
-      comprovante_residencia_url,
-      foto_url,
-      status: "pendente",
-    })
-    .eq("id", requestId)
-    .select()
-    .single();
+  const aluno = await prisma.aluno.update({
+    where: { usuarioId: requestId },
+    data: {
+      comprovanteMatriculaUrl: comprovante_matricula_url,
+      comprovanteResidenciaUrl: comprovante_residencia_url,
+      fotoUrl: foto_url,
+      statusCadastro: status || "pendente",
+    },
+    include: {
+      usuario: {
+        select: { id: true, nome: true, email: true, tipo: true, status: true },
+      },
+    },
+  });
 
-  if (error) throw error;
-  return data;
+  return aluno;
 }
 
 export async function listRequests(requester) {
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .select("*, cursos(nome)")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const hoje = truncDate();
 
-  await Promise.all(
-    data.map(async (req) => {
-      if (req.usuario_id) {
-        try {
-          const carteirinhas = await listarCarteirinhas(
-            req.usuario_id,
-            requester
-          );
-          req.carteirinha_url = carteirinhas[0]?.signedUrl || null;
-        } catch (error) {
-          req.carteirinha_url = null;
-        }
-      }
+  const data = await prisma.aluno.findMany({
+    include: {
+      usuario: {
+        select: { id: true, nome: true, email: true, status: true, createdAt: true },
+      },
+      curso: INCLUDE_CURSO_NOME.curso,
+      carteirinhas: {
+        where: { dataValidade: { gte: new Date(hoje) } },
+        orderBy: { dataValidade: "desc" },
+        take: 1,
+        select: { id: true, arquivoUrl: true },
+      },
+    },
+    orderBy: { usuario: { createdAt: "desc" } },
+  });
+
+  const comSignedUrls = await Promise.all(
+    data.map(async (aluno) => {
+      const carteirinha = aluno.carteirinhas[0];
+      if (!carteirinha?.arquivoUrl) return { ...aluno, carteirinha_url: null };
+      const signedUrl = await getSignedUrl(carteirinha.arquivoUrl, 60 * 10).catch(() => null);
+      return { ...aluno, carteirinha_url: signedUrl };
     })
   );
 
-  return data;
+  return comSignedUrls;
 }
 
 export async function listPendingRequests() {
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .select("*")
-    .eq("status", "pendente")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
+  const data = await prisma.aluno.findMany({
+    where: { statusCadastro: "pendente" },
+    include: {
+      usuario: {
+        select: { id: true, nome: true, email: true, createdAt: true },
+      },
+      curso: INCLUDE_CURSO_NOME.curso,
+    },
+    orderBy: { usuario: { createdAt: "desc" } },
+  });
 
   return data;
 }
 
 export async function approveSignupRequest(id, userId) {
-  // Busca requisição
-  const { data: reqData, error: reqError } = await supabase
-    .from("signup_requests")
-    .select("*")
-    .eq("id", id)
-    .single();
-  if (reqError) throw reqError;
-  if (!reqData) throw new Error("Requisição não encontrada");
-  if (reqData.status !== "pendente")
+  const aluno = await prisma.aluno.findUnique({
+    where: { usuarioId: id },
+    include: { usuario: true },
+  });
+
+  if (!aluno) throw new Error("Requisição não encontrada");
+  if (aluno.statusCadastro !== "pendente")
     throw new Error("Requisição já foi processada");
 
-  // Cria usuário
-  const { data: createdUser, error: createdError } = await supabase
-    .from("usuarios")
-    .insert({
-      nome: reqData.nome,
-      email: reqData.email,
-      senha_hash: reqData.senha_hash,
-      tipo: "aluno",
-      status: "ativo",
-    })
-    .select()
-    .single();
-  if (createdError) throw createdError;
+  const [updatedAluno] = await prisma.$transaction([
+    prisma.aluno.update({
+      where: { usuarioId: id },
+      data: { statusCadastro: "ativo" },
+    }),
+    prisma.usuario.update({
+      where: { id },
+      data: { status: "ativo" },
+    }),
+    prisma.cadastroHistorico.create({
+      data: {
+        alunoId: id,
+        statusAnterior: "pendente",
+        statusNovo: "ativo",
+        origem: "admin",
+        alteradoPorId: userId,
+        motivo: "Aprovado pelo administrador",
+      },
+    }),
+  ]);
 
-  // Cria aluno
-  const { data: createdAluno, error: alunoError } = await supabase
-    .from("alunos")
-    .insert({
-      usuario_id: createdUser.id,
-      rg: reqData.rg,
-      cpf: reqData.cpf,
-      telefone: reqData.telefone,
-      data_nascimento: reqData.data_nascimento,
-      endereco: reqData.endereco,
-      tipo_sanguineo: reqData.tipo_sanguineo,
-      comprovante_residencia_url: reqData.comprovante_residencia_url,
-      comprovante_matricula_url: reqData.comprovante_matricula_url,
-      foto_url: reqData.foto_url,
-      status_cadastro: "aprovado",
-      curso_id: reqData.curso_id,
-    })
-    .select()
-    .single();
-  if (alunoError) throw alunoError;
+  let carteirinha = null;
+  try {
+    carteirinha = await gerarCarteirinha(id, userId);
+    notifySignupApproved(aluno.telegramId, aluno.usuario.nome);
+  } catch (err) {
+    logger.error({ err, usuarioId: id }, 'Erro ao gerar carteirinha na aprovação — aluno aprovado');
+  }
 
-  // Atualiza status da requisição
-  await supabase
-    .from("signup_requests")
-    .update({ status: "aprovado", usuario_id: createdUser.id })
-    .eq("id", id);
-
-  const carteirinha = await gerarCarteirinha(createdUser.id, userId);
-
-  return { usuario: createdUser, aluno: createdAluno, carteirinha };
+  return { usuario: aluno.usuario, aluno: updatedAluno, carteirinha };
 }
 
 export async function reproveSignupRequest(id) {
-  const { data: reqData, error: reqError } = await supabase
-    .from("signup_requests")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const aluno = await prisma.aluno.findUnique({
+    where: { usuarioId: id },
+    include: { usuario: INCLUDE_USUARIO_NOME.usuario },
+  });
 
-  if (reqError) throw reqError;
-  if (!reqData) throw new Error("Requisição não encontrada");
+  if (!aluno) throw new Error("Requisição não encontrada");
 
-  await supabase
-    .from("signup_requests")
-    .update({ status: "reprovado" })
-    .eq("id", id);
+  const [updatedAluno] = await prisma.$transaction([
+    prisma.aluno.update({
+      where: { usuarioId: id },
+      data: { statusCadastro: "reprovado" },
+    }),
+    prisma.cadastroHistorico.create({
+      data: {
+        alunoId: id,
+        statusAnterior: aluno.statusCadastro,
+        statusNovo: "reprovado",
+        origem: "admin",
+        motivo: "Reprovado pelo administrador",
+      },
+    }),
+  ]);
+
+  notifySignupReproved(aluno.telegramId, aluno.usuario?.nome);
+
+  return { aluno: updatedAluno };
 }
 
 export async function listRequestsPaginated({ status, limit = 10, offset = 0 }) {
-  let query = supabase
-    .from("signup_requests")
-    .select("*, cursos(nome)", { count: "exact" })
-    .order("created_at", { ascending: false });
+  const where = {};
+  if (status) where.statusCadastro = status;
 
-  if (status) query = query.eq("status", status);
-  // Supabase usa .range para paginação: .range(start, end)
-  query = query.range(offset, offset + limit - 1);
+  const [data, total] = await Promise.all([
+    prisma.aluno.findMany({
+      where,
+      include: {
+        usuario: {
+          select: { id: true, nome: true, email: true, createdAt: true },
+        },
+        curso: INCLUDE_CURSO_NOME.curso,
+      },
+      orderBy: { usuario: { createdAt: "desc" } },
+      skip: offset,
+      take: limit,
+    }),
+    prisma.aluno.count({ where }),
+  ]);
 
-  const { data, error, count } = await query;
-  if (error) throw error;
-  return {
-    data,
-    total: count
-  };
+  return { data, total };
 }
 
 export async function getRequestById(id) {
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .select("*, cursos(nome, faculdade_id, faculdades(nome))")
-    .eq("id", id)
-    .maybeSingle();
+  const aluno = await prisma.aluno.findUnique({
+    where: { usuarioId: id },
+    include: {
+      usuario: {
+        select: { id: true, nome: true, email: true, tipo: true, status: true },
+      },
+      curso: {
+        include: {
+          faculdade: { select: { id: true, nome: true } },
+        },
+      },
+    },
+  });
 
-  if (error) throw error;
-  if (!data) throw new Error("Requisição não encontrada");
+  if (!aluno) throw new Error("Requisição não encontrada");
 
   const bucket = "alunos_docs";
 
-  if (data.comprovante_residencia_url) {
-    const { data: signed } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(data.comprovante_residencia_url, 60 * 60); // 1 hora
-    data.comprovante_residencia_url = signed?.signedUrl || null;
-  }
-  if (data.comprovante_matricula_url) {
-    const { data: signed } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(data.comprovante_matricula_url, 60 * 60);
-    data.comprovante_matricula_url = signed?.signedUrl || null;
-  }
-  if (data.foto_url) {
-    const { data: signed } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(data.foto_url, 60 * 60);
-    data.foto_url = signed?.signedUrl || null;
-  }
+  const result = {
+    ...aluno.usuario,
+    ...aluno,
+    usuario: undefined,
+  };
 
-  return data;
+  const urlsToSign = ['comprovanteResidenciaUrl', 'comprovanteMatriculaUrl', 'fotoUrl']
+    .filter(k => result[k])
+    .map(k => result[k])
+
+  const signedUrls = urlsToSign.length
+    ? await Promise.all(urlsToSign.map(url => getSignedUrl(url, 60 * 60).catch(() => null)))
+    : []
+
+  const urlKeys = ['comprovanteResidenciaUrl', 'comprovanteMatriculaUrl', 'fotoUrl'].filter(k => result[k])
+  urlKeys.forEach((key, i) => { result[key] = signedUrls[i] })
+
+  return result;
 }
 
 export async function approveReenvioRequest(id) {
-  const { data: reqData, error: reqError } = await supabase
-    .from("signup_requests")
-    .select("*")
-    .eq("id", id)
-    .single();
+  const reqData = await prisma.aluno.findUnique({
+    where: { usuarioId: id },
+    include: { usuario: INCLUDE_USUARIO_NOME.usuario },
+  });
 
-  if (reqError) throw reqError;
   if (!reqData) throw new Error("Reenvio não encontrado");
-  if (reqData.status !== "pendente")
+  if (reqData.statusCadastro !== "pendente")
     throw new Error("Requisição já foi processada");
-  if (!reqData.reenvio)
-    throw new Error("Esta requisição não é um reenvio de documentos");
 
-  
+  const [aluno] = await prisma.$transaction([
+    prisma.aluno.update({
+      where: { usuarioId: id },
+      data: { statusCadastro: "ativo" },
+    }),
+    prisma.usuario.update({
+      where: { id },
+      data: { status: "ativo" },
+    }),
+  ]);
 
-  const { data: aluno, error: alunoError } = await supabase
-    .from("alunos")
-    .update({
-      comprovante_residencia_url: reqData.comprovante_residencia_url,
-      comprovante_matricula_url: reqData.comprovante_matricula_url,
-      foto_url: reqData.foto_url,
-      status_cadastro: "ativo",
-    })
-    .eq("usuario_id", reqData.usuario_id)
-    .select()
-    .single();
-
-  if (alunoError) throw alunoError;
-
-  await supabase
-    .from("signup_requests")
-    .update({ status: "aprovado" })
-    .eq("id", id);
+  notifyReenvioApproved(reqData.telegramId, reqData.usuario?.nome);
 
   return { aluno };
 }
 
 export async function obterMeuPerfil(id) {
-  const { data, error } = await supabase
-    .from("signup_requests")
-    .select("*, cursos(nome, faculdade_id, faculdades(nome))")
-    .eq("id", id)
-    .maybeSingle();
+  const aluno = await prisma.aluno.findUnique({
+    where: { usuarioId: id },
+    include: {
+      usuario: {
+        select: { id: true, nome: true, email: true, tipo: true, status: true },
+      },
+      curso: {
+        include: {
+          faculdade: { select: { id: true, nome: true } },
+        },
+      },
+    },
+  });
 
-  if (error) throw error;
-  return data;
+  if (!aluno) throw new Error("Aluno não encontrado");
+
+  return {
+    ...aluno.usuario,
+    ...aluno,
+    usuario: undefined,
+  };
 }

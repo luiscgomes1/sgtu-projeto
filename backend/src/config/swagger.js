@@ -25,7 +25,8 @@ const options = {
   apis: [
     './src/routes/*.js',
     './src/modules/**/*.routes.js',
-    './src/modules/**/*.controller.js'
+    './src/modules/**/*.controller.js',
+    './src/modules/**/*.swagger.js'
   ],
 };
 

@@ -3,10 +3,10 @@ import * as SanitizeFunctions from '../utils/functions.js';
 
 /**
  * Middleware para limpar campos de máscara (CPF, Telefone) e normalizar strings (Nome, Email).
- * Deve ser aplicado ANTES do middleware de validação Joi.
+ * Deve ser aplicado ANTES do middleware de validação.
  */
 export const sanitizeData = (req, res, next) => {
-    const data = req.body;
+    const data = req.body || {};
     
     if (data.nome) {
         data.nome = SanitizeFunctions.cleanString(data.nome);

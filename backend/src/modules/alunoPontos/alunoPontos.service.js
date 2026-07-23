@@ -1,121 +1,97 @@
-import { supabase } from '../../config/supabase.js';
+import { prisma } from '../../config/prisma.js';
 
 export async function vincularAlunoPonto(alunoId, pontoId) {
-    await supabase
-        .from('alunos_pontos')
-        .update({ status: "inativo" })
-        .eq('aluno_id', alunoId)
-        .eq('status', 'ativo');
+    await prisma.alunoPonto.updateMany({
+      where: { alunoId, status: "ativo" },
+      data: { status: "inativo" },
+    });
 
-    const { data: existing } = await supabase
-        .from('alunos_pontos')
-        .select('*')
-        .eq('aluno_id', alunoId)
-        .eq('ponto_id', pontoId)
-        .maybeSingle();
+    const existing = await prisma.alunoPonto.findUnique({
+      where: { alunoId_pontoId: { alunoId, pontoId } },
+    });
 
     if (existing) {
-        const { data, error } = await supabase
-            .from('alunos_pontos')
-            .update({ status: 'ativo' })
-            .eq('aluno_id', alunoId)
-            .eq('ponto_id', pontoId)
-            .select()
-            .single();
-        if (error) throw error;
-        return { message: "Vínculo reativado com sucesso.", data };
+      const data = await prisma.alunoPonto.update({
+        where: { alunoId_pontoId: { alunoId, pontoId } },
+        data: { status: "ativo" },
+      });
+      return { message: "Vínculo reativado com sucesso.", data };
     }
 
-    const { data, error } = await supabase
-        .from('alunos_pontos')
-        .insert([{ aluno_id: alunoId, ponto_id: pontoId, status: 'ativo' }])
-        .select()
-        .single();
-    if (error) throw error;
+    const data = await prisma.alunoPonto.create({
+      data: { alunoId, pontoId, status: "ativo" },
+    });
     return { message: "Aluno vinculado ao ponto com sucesso.", data };
 }
 
 export async function desvincularAlunoPonto(alunoId, pontoId) {
-    const { error } = await supabase
-        .from('alunos_pontos')
-        .update({ status: 'inativo' })
-        .eq('aluno_id', alunoId)
-        .eq('ponto_id', pontoId)
-        .eq('status', 'ativo');
-    if (error) throw error;
+    await prisma.alunoPonto.updateMany({
+      where: { alunoId, pontoId, status: "ativo" },
+      data: { status: "inativo" },
+    });
     return { message: "Aluno desvinculado do ponto com sucesso." };
 }
 
 export async function listarPontoDoAluno(alunoId) {
-    const { data: alunoPonto, error } = await supabase
-        .from('alunos_pontos')
-        .select('id, status, aluno_id, ponto_id, pontos(id, nome, endereco)')
-        .eq('aluno_id', alunoId)
-        .eq('status', 'ativo')
-        .maybeSingle();
-    if (error) throw error;
+    const alunoPonto = await prisma.alunoPonto.findFirst({
+      where: { alunoId, status: "ativo" },
+      include: { ponto: { select: { id: true, nome: true, endereco: true } } },
+    });
+
     if (!alunoPonto) return null;
 
-    const { data: aluno, error: alunoError } = await supabase
-        .from('alunos')
-        .select('curso_id, cursos(faculdade_id)')
-        .eq('usuario_id', alunoId)
-        .maybeSingle();
-    if (alunoError) throw alunoError;
-    const faculdadeId = aluno?.cursos?.faculdade_id;
+    const aluno = await prisma.aluno.findUnique({
+      where: { usuarioId: alunoId },
+      include: { curso: { select: { faculdadeId: true } } },
+    });
+    const faculdadeId = aluno?.curso?.faculdadeId;
     if (!faculdadeId) return { ...alunoPonto, rota: null };
 
-    const { data: rotaPontos, error: rotaPontosError } = await supabase
-        .from('rota_pontos')
-        .select('rota_id')
-        .eq('ponto_id', alunoPonto.ponto_id)
-        .eq('status', 'ativo');
-    if (rotaPontosError) throw rotaPontosError;
-    const rotaIds = rotaPontos.map(rp => rp.rota_id);
+    const rotaPontos = await prisma.rotaPonto.findMany({
+      where: { pontoId: alunoPonto.pontoId, status: "ativo" },
+      select: { rotaId: true },
+    });
+    const rotaIds = rotaPontos.map(rp => rp.rotaId);
 
     if (!rotaIds.length) return { ...alunoPonto, rota: null };
 
-    const { data: rotaFaculdade, error: rotaFaculdadeError } = await supabase
-        .from('rota_faculdades')
-        .select('rota_id')
-        .in('rota_id', rotaIds)
-        .eq('faculdade_id', faculdadeId)
-        .eq('status', 'ativo')
-        .maybeSingle();
-    if (rotaFaculdadeError) throw rotaFaculdadeError;
+    const rotaFaculdade = await prisma.rotaFaculdade.findFirst({
+      where: { rotaId: { in: rotaIds }, faculdadeId, status: "ativo" },
+    });
     if (!rotaFaculdade) return { ...alunoPonto, rota: null };
 
-    const { data: rota, error: rotaError } = await supabase
-        .from('rotas')
-        .select('id, nome')
-        .eq('id', rotaFaculdade.rota_id)
-        .maybeSingle();
-    if (rotaError) throw rotaError;
+    const rota = await prisma.rota.findUnique({
+      where: { id: rotaFaculdade.rotaId },
+      select: { id: true, nome: true },
+    });
 
     return {
-        id: alunoPonto.ponto_id,
-        nome: alunoPonto.pontos?.nome,
-        endereco: alunoPonto.pontos?.endereco,
+        id: alunoPonto.pontoId,
+        nome: alunoPonto.ponto?.nome,
+        endereco: alunoPonto.ponto?.endereco,
         status: alunoPonto.status,
         rota: rota || null
     };
 }
 
 export async function listarAlunosDoPonto(pontoId) {
-    const { data, error } = await supabase
-        .from('alunos_pontos')
-        .select('aluno_id, status, alunos(usuario_id, usuarios(nome), cpf, rg, email, telefone)')
-        .eq('ponto_id', pontoId)
-        .eq('status', 'ativo');
-    
-    if (error) throw error;
+    const data = await prisma.alunoPonto.findMany({
+      where: { pontoId, status: "ativo" },
+      include: {
+        aluno: {
+          include: {
+            usuario: { select: { nome: true } },
+          },
+        },
+      },
+    });
+
     return data.map(item => ({
-        id: item.aluno_id,
-        nome: item.alunos?.usuarios?.nome,
-        email: item.alunos?.email,
-        cpf: item.alunos?.cpf,
-        rg: item.alunos?.rg,
-        telefone: item.alunos?.telefone,
+        id: item.alunoId,
+        nome: item.aluno?.usuario?.nome,
+        cpf: item.aluno?.cpf,
+        rg: item.aluno?.rg,
+        telefone: item.aluno?.telefone,
         status: item.status
     }));
 }

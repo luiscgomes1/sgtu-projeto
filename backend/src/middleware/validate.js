@@ -1,36 +1,28 @@
-import Joi from 'joi';
-
-
-
 /**
- * Middleware para validar o corpo (body), parâmetros (params) ou query (query) da requisição.
- * @param {Joi.ObjectSchema} schema - O schema Joi a ser usado.
- * @param {'body'|'params'|'query'} [location='body'] - Onde buscar os dados na requisição.
+ * Middleware para validar body, params ou query com Zod.
+ * @param {import('zod').ZodSchema} schema
+ * @param {'body'|'params'|'query'} [location='body']
  */
 export const validate = (schema, location = 'body') => (req, res, next) => {
-  
   const data = req[location];
-  
-  // Valida o dado (data) contra o schema
-  // Usamos stripUnknown:true para remover chaves extras do payload antes
-  // que cheguem ao controller/serviço (evita erros como '"x" is not allowed').
-  const { error } = schema.validate(data, { 
-    abortEarly: false,
-    stripUnknown: true // Remove campos não declarados no schema
-  });
+  const result = schema.safeParse(data);
 
-  if (error) {
-    // Formata o erro para ser capturado pelo errorHandler
-    const details = error.details.map(d => d.message.replace(/"/g, ''));
-    
-    // Sinaliza o erro para o errorHandler em error.js
+  if (!result.success) {
+    const details = result.error.issues.map(
+      (issue) => `${issue.path.join('.')}: ${issue.message}`
+    );
     const validationError = new Error('Erro de validação');
     validationError.details = details;
-    validationError.name = 'ValidationError'; 
-    validationError.status = 400; // Define o status para 400 Bad Request
-
+    validationError.name = 'ValidationError';
+    validationError.status = 400;
     return next(validationError);
   }
-  
+
+  // Substitui req.body com os dados parseados (strip + coerção + defaults).
+  // req.params e req.query são read-only no Express v5, então só validamos sem substituir.
+  if (location === 'body') {
+    req[location] = result.data;
+  }
+
   next();
 };

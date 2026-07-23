@@ -23,5 +23,19 @@ router.put(
   validate(ConfiguracoesSchema.horaLimiteUpdateSchema),
   ConfiguracoesController.updateHoraLimiteController
 );
+router.put(
+  "/logo",
+  requireAuth,
+  requireRole("admin"),
+  validate(ConfiguracoesSchema.logoUpdateSchema),
+  ConfiguracoesController.updateLogoController
+);
+router.put(
+  "/nome-organizacao",
+  requireAuth,
+  requireRole("admin"),
+  validate(ConfiguracoesSchema.nomeOrganizacaoUpdateSchema),
+  ConfiguracoesController.updateNomeOrganizacaoController
+);
 
 export default router;

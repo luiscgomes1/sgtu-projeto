@@ -15,7 +15,8 @@ router.post(
 );
 
 router.patch(
-  "/:requestId",
+  "/:id",
+  sanitizeData,
   validate(SignupSchema.requestIdParamsSchema, "params"),
   validate(SignupSchema.signupUpdateDocsSchema),
   SignupRequest.updateRequestController
@@ -28,14 +29,6 @@ router.get(
   requireAuth,
   requireRole("admin"),
   SignupRequest.listRequestsPaginatedController
-);
-
-router.get(
-  "/:id",
-  requireAuth,
-  requireRole("admin"),
-  validate(SignupSchema.requestIdParamsSchema, "params"),
-  SignupRequest.getRequestByIdController
 );
 
 router.get(
@@ -52,10 +45,19 @@ router.get(
   SignupRequest.listPendingController
 );
 
+router.get(
+  "/:id",
+  requireAuth,
+  requireRole("admin"),
+  validate(SignupSchema.requestIdParamsSchema, "params"),
+  SignupRequest.getRequestByIdController
+);
+
 router.put(
   "/:id/approve",
   requireAuth,
   requireRole("admin"),
+  sanitizeData,
   validate(SignupSchema.requestIdParamsSchema, "params"),
   SignupRequest.approveController
 );
@@ -64,6 +66,7 @@ router.put(
   "/:id/reprove",
   requireAuth,
   requireRole("admin"),
+  sanitizeData,
   validate(SignupSchema.requestIdParamsSchema, "params"),
   SignupRequest.reproveController
 );
@@ -72,6 +75,7 @@ router.put(
   "/:id/approve-reenvio",
   requireAuth,
   requireRole("admin"),
+  sanitizeData,
   validate(SignupSchema.requestIdParamsSchema, "params"),
   SignupRequest.approveReenvioController
 );

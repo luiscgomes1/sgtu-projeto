@@ -1,13 +1,13 @@
 import cron from "node-cron";
+import jwt from 'jsonwebtoken';
 import { botRequest } from "./apiClient.js";
 import { safeSend } from './safeSend.js';
+import { logger } from '../config/logger.js';
 
 export function setupMotoristaBot(bot) {
   const MOTORISTAS_GROUP_ID = process.env.MOTORISTAS_GROUP_ID;
   if (!MOTORISTAS_GROUP_ID) {
-    console.warn(
-      "⚠️ MOTORISTAS_GROUP_ID não está definido. Bot de motorista não será configurado."
-    );
+    logger.warn("⚠️ MOTORISTAS_GROUP_ID não está definido. Bot de motorista não será configurado.");
     return;
   }
 
@@ -53,7 +53,7 @@ export function setupMotoristaBot(bot) {
         parse_mode: "Markdown",
       });
     } catch (err) {
-      console.error("Erro ao enviar lista automática:", err);
+      logger.error({ err }, "Erro ao enviar lista automática");
       if (MOTORISTAS_GROUP_ID) {
         await safeSend(bot.telegram, 'sendMessage', MOTORISTAS_GROUP_ID, "⚠️ Erro Crítico: Falha ao gerar e enviar lista automática de presenças.", { parse_mode: "Markdown" });
       }
@@ -75,16 +75,18 @@ export function setupMotoristaBot(bot) {
       }
 
       if (!totalAlunos) {
-        console.log('Nenhum aluno confirmado para hoje — não será enviado o link do motorista.');
+        logger.info('Nenhum aluno confirmado para hoje — não será enviado o link do motorista.');
         return;
       }
 
-      const WEB_VIEW_TOKEN = process.env.WEB_VIEW_TOKEN;
       const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+      const webviewToken = jwt.sign(
+        { scope: 'motorista:volta', iat: Math.floor(Date.now() / 1000) },
+        process.env.JWT_SECRET,
+        { expiresIn: '2h' },
+      );
 
-      const WEB_VIEW_URL = `${FRONTEND_URL}/motorista/volta?token=${WEB_VIEW_TOKEN}`;
-
-      console.log('DEBUG: WEB_VIEW_URL =', WEB_VIEW_URL);
+      const WEB_VIEW_URL = `${FRONTEND_URL}/motorista/volta?token=${webviewToken}`;
 
       const msg = `🚌 *EMBARQUE DE VOLTA INICIADO* 🚌\n\n` +
         `Acompanhe o status do embarque em tempo real:\n\n` +
@@ -104,11 +106,10 @@ export function setupMotoristaBot(bot) {
         await safeSend(bot.telegram, 'sendMessage', MOTORISTAS_GROUP_ID, markdownMsg, { parse_mode: 'Markdown' });
       }
     } catch (err) {
-      console.error('Erro ao enviar painel de motorista (21:00):', err);
+      logger.error({ err }, 'Erro ao enviar painel de motorista (23:21)');
       if (MOTORISTAS_GROUP_ID) {
         await safeSend(bot.telegram, 'sendMessage', MOTORISTAS_GROUP_ID, "⚠️ Erro ao tentar enviar painel de motorista.", { parse_mode: "Markdown" });
       }
     }
   });
-
 }

@@ -1,17 +1,17 @@
 import * as BotTokenService from './botToken.service.js';
+import { ok, fail } from '../../utils/response.js';
 
 const BOT_API_KEY = process.env.BOT_API_KEY;
 
 export async function botTokenController(req, res, next) {
-  try {
     const receivedKey = req.headers['x-bot-api-key'];
     if (!BOT_API_KEY || receivedKey !== BOT_API_KEY) {
-      return res.status(401).json({ error: 'API key inválida para emissão de token de bot.' });
+      return fail(res, 401, 'API key inválida para emissão de token de bot.');
     }
 
     const { telegramId, userId } = req.body || {};
     if (!telegramId && !userId) {
-      return res.status(400).json({ error: 'Informe telegramId ou userId.' });
+      return fail(res, 400, 'Informe telegramId ou userId.');
     }
 
     let result = null;
@@ -21,10 +21,7 @@ export async function botTokenController(req, res, next) {
       result = await BotTokenService.generateBotTokenForUserId(userId, { scope: req.body.scope });
     }
 
-    if (!result) return res.status(404).json({ error: 'Usuário não encontrado para o identificador informado.' });
+    if (!result) return fail(res, 404, 'Usuário não encontrado para o identificador informado.');
 
-    return res.json({ token: result.token, user: result.user });
-  } catch (err) {
-    next(err);
-  }
+    return ok(res, { token: result.token, user: result.user });
 }

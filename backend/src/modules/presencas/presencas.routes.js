@@ -4,6 +4,8 @@ import * as PresencaController from "./presencas.controller.js";
 import checkCarteirinha from '../../middleware/checkCarteirinha.js';
 import { validate } from "../../middleware/validate.js";
 import * as PresencaSchema from "./presencas.schema.js";
+import { publicLimiter } from "../../middleware/rateLimit.js";
+import { sanitizeData } from "../../middleware/sanitize.js";
 
 const router = Router();
 
@@ -23,7 +25,7 @@ router.get(
 );
 
 router.delete(
-  "/:id/desativar",
+  "/:presencaId/desativar",
   requireAuth,
   requireRole("admin"),
   validate(PresencaSchema.presencaIdParamsSchema, "params"),
@@ -33,55 +35,22 @@ router.delete(
 router.post(
   "/marcar-presenca",
   requireAuth,
+  sanitizeData,
   checkCarteirinha,
   PresencaController.marcarPresencaController
 );
-/**
- * @swagger
- * /presencas/marcar-presenca:
- *   post:
- *     summary: Marca presença do aluno autenticado
- *     tags:
- *       - Presenças
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       '200':
- *         description: Presença marcada com sucesso
- *       '401':
- *         description: Token inválido ou ausente
- *       '403':
- *         description: Escopo insuficiente
- */
 router.post(
   "/confirmar-embarque",
+  publicLimiter,
+  sanitizeData,
   validate(PresencaSchema.validarTokenSchema),
   PresencaController.confirmarEmbarqueController
 );
-/**
- * @swagger
- * /presencas/confirmar-embarque:
- *   post:
- *     summary: Confirma embarque via token QR
- *     tags:
- *       - Presenças
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               token:
- *                 type: string
- *     responses:
- *       '200':
- *         description: Embarque confirmado
- *       '400':
- *         description: Token inválido
- */
+
 router.post(
   "/confirmar-volta",
+  publicLimiter,
+  sanitizeData,
   validate(PresencaSchema.validarTokenSchema),
   PresencaController.confirmarVoltaController
 );

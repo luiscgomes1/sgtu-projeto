@@ -1,34 +1,26 @@
-import Joi from "joi";
+import { z } from 'zod';
+import { uuidParam, statusField } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: "uuidv4" }).required().messages({
-  "string.guid": "O ID fornecido não é um UUID válido",
-  "any.required": "O ID é obrigatório",
+export const rotaCreateSchema = z.object({
+  nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres'),
 });
 
-export const rotaCreateSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).required().messages({
-    "string.min": "O nome deve ter pelo menos {#limit} caracteres",
-    "string.max": "O nome deve ter no máximo {#limit} caracteres",
-    "any.required": "O nome é obrigatório",
-  }),
+export const rotaUpdateSchema = z.object({
+  nome: z.string().min(3, 'O nome deve ter pelo menos 3 caracteres').max(100, 'O nome deve ter no máximo 100 caracteres').optional(),
+  status: statusField.optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'Nome deve ser fornecido para atualização' });
+
+export const rotaListQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    search: z.string().default(''),
+    status: z.enum(['ativo', 'inativo', '']).default(''),
 });
 
-export const rotaUpdateSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).optional().messages({
-    "string.min": "O nome deve ter pelo menos {#limit} caracteres",
-    "string.max": "O nome deve ter no máximo {#limit} caracteres",
-  }),
-  status: Joi.string().valid("ativo", "inativo").optional(),
-}).min(1).messages({
-  "object.min": "Nome deve ser fornecido para atualização",
+export const rotaIdParamSchema = z.object({
+  id: uuidParam,
 });
 
-export const rotaIdParamSchema = Joi.object({
-  id: uuidRegex.label("ID da Rota"),
-});
-
-export const rotaStatusSchema = Joi.object({
-  status: Joi.string().valid("ativo", "inativo").required().messages({
-    "any.required": "O status é obrigatório",
-  }),
+export const rotaStatusSchema = z.object({
+  status: statusField,
 });

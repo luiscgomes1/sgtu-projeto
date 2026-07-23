@@ -1,20 +1,15 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam } from '../../shared/schemas.js';
 
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const uuidSchema = Joi.string().guid({ version: 'uuidv4' }).required().messages({
-    'string.guid': 'O ID fornecido não é um UUID válido',
-    'any.required': 'O ID é obrigatório',
+export const alunoPontoBodySchema = z.object({
+    alunoId: uuidParam,
+    pontoId: uuidParam,
 });
 
-export const alunoPontoBodySchema = Joi.object({
-    alunoId: uuidSchema.label('Aluno ID'),
-    pontoId: uuidSchema.label('Ponto ID'),
+export const alunoIdParamSchema = z.object({
+    alunoId: uuidParam,
 });
 
-export const alunoIdParamSchema = Joi.object({
-    alunoId: uuidSchema.label('Aluno ID'),
-});
-
-export const pontoIdParamSchema = Joi.object({
-    pontoId: uuidSchema.label('Ponto ID'),
+export const pontoIdParamSchema = z.object({
+    pontoId: uuidParam,
 });

@@ -1,3 +1,5 @@
+import { logger } from '../config/logger.js';
+
 function isBlockedError(err) {
   if (!err) return false;
   const code = err?.response?.statusCode ?? err?.code;
@@ -8,19 +10,19 @@ function isBlockedError(err) {
 export async function safeSend(telegram, method, chatId, ...args) {
   try {
     if (!telegram || typeof telegram[method] !== 'function') {
-      console.warn('safeSend: método inválido ou telegram não inicializado:', method);
+      logger.warn({ method }, 'safeSend: método inválido ou telegram não inicializado');
       return null;
     }
     return await telegram[method](chatId, ...args);
   } catch (err) {
     try {
       if (isBlockedError(err)) {
-        console.warn(`safeSend: chat ${chatId} provavelmente bloqueou o bot (403). Mensagem ignorada.`);
+        logger.warn({ chatId }, 'safeSend: chat provavelmente bloqueou o bot (403). Mensagem ignorada.');
         return null;
       }
-      console.error('safeSend: erro ao enviar mensagem para chat', chatId, err?.response?.statusCode ?? err?.code, err?.message || err);
+      logger.error({ chatId, statusCode: err?.response?.statusCode ?? err?.code, err: err?.message || err }, 'safeSend: erro ao enviar mensagem para chat');
     } catch (e) {
-      console.error('safeSend: erro ao processar erro', e);
+      logger.error({ err: e }, 'safeSend: erro ao processar erro');
     }
     return null;
   }

@@ -32,21 +32,6 @@ router.get(
   AlunoController.obterContagensController
 );
 router.get("/me", requireAuth, AlunoController.obterMeuPerfilController);
-/**
- * @swagger
- * /alunos/me:
- *   get:
- *     summary: Retorna o perfil do aluno autenticado
- *     tags:
- *       - Alunos
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       '200':
- *         description: Perfil do aluno
- *       '401':
- *         description: Não autenticado
- */
 
 router.get(
   "/:id",

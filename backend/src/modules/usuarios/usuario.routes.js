@@ -8,6 +8,10 @@ const router = Router();
 
 router.get("/me", requireAuth, UserController.getMeController);
 router.put("/me", requireAuth, validate(UserSchema.usuarioUpdateSchema), UserController.atualizarPerfilController);
+router.post("/me/validar-senha", requireAuth, UserController.validarSenhaController);
 router.patch("/me/senha", requireAuth, validate(UserSchema.alterarSenhaSchema), UserController.alterarSenhaController);
+router.post("/me/telegram/token", requireAuth, UserController.gerarTokenTelegramController);
+router.get("/me/telegram/status", requireAuth, UserController.statusTelegramController);
+router.post("/me/telegram/desconectar", requireAuth, UserController.desconectarTelegramController);
 
 export default router;

@@ -2,51 +2,86 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import morgan from 'morgan';
+import crypto from 'crypto';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
+import { logger } from './config/logger.js';
+import pinoHttp from 'pino-http';
+import { healthController } from './modules/health/health.controller.js';
 import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { generalLimiter } from './middleware/rateLimit.js';
-import "./bot/bot.js";
+import { sanitizeData } from './middleware/sanitize.js';
 
-process.on('unhandledRejection', (reason, p) => {
-  console.error('Unhandled Rejection at:', p, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  logger.error({ err: reason }, 'Rejeição não tratada');
 });
 
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception thrown:', err);
+  logger.fatal({ err }, 'Exceção não capturada');
+  process.exit(1);
 });
 
 const app = express();
 
-app.use(helmet());
-app.use(express.json({ limit: '10mb' }));
+// Request ID + nonce
+app.use((req, res, next) => {
+  req.id = crypto.randomUUID();
+  res.locals.nonce = crypto.randomBytes(16).toString('base64');
+  next();
+});
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", (req, res) => `'nonce-${res.locals.nonce}'`],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+    },
+  },
+  hsts: {
+    maxAge: 63072000,
+    includeSubDomains: true,
+    preload: true,
+  }
+}));
+
+app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-const allowedOrigins = 
-  process.env.NODE_ENV === 'production'
-    ? ['https://seu-dominio.com'] 
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
+  : process.env.NODE_ENV === 'production'
+    ? (() => { throw new Error('Defina CORS_ORIGIN no .env em produção'); })()
     : ['http://localhost:5173', 'http://localhost:4000'];
-    
-app.use(
-  cors({
-    origin: allowedOrigins,
-    credentials: true,
-  })
-);
 
-app.use(morgan('dev'));
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true,
+}));
+
+// Unified HTTP request logging via Pino (replaces Morgan)
+app.use(pinoHttp({
+  logger,
+  autoLogging: {
+    ignore: (req) => req.url === '/api/health',
+  },
+}));
 
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+app.get('/api/health', healthController);
+app.use('/api', generalLimiter, sanitizeData, routes);
 
-app.use('/api', generalLimiter, routes);
-
-// Middleware de tratamento de erros
 app.use(notFound);
 app.use(errorHandler);
-
 
 export default app;

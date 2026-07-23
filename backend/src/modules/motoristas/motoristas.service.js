@@ -1,78 +1,72 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from "../../config/prisma.js";
+import { paginate, paginatedResponse } from '../../utils/pagination.js';
 
 export async function createMotorista(payload) {
-    const { data, error } = await supabase
-        .from("motoristas")
-        .insert([{
-            nome: payload.nome,
-            cpf: payload.cpf,
-            data_nascimento: payload.data_nascimento,
-            telefone: payload.telefone,
-            cnh: payload.cnh,
-            validade_cnh: payload.validade_cnh
-        }])
-        .select()
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.motorista.create({
+      data: {
+        nome: payload.nome,
+        cpf: payload.cpf,
+        dataNascimento: payload.data_nascimento ? new Date(payload.data_nascimento) : undefined,
+        telefone: payload.telefone,
+        cnh: payload.cnh,
+        validadeCnh: payload.validade_cnh ? new Date(payload.validade_cnh) : undefined,
+      },
+    });
     return data;
 }
 
-//listar todos os motoristas (por padrão apenas os ativos) com possibilidade de filtro por status
 export async function listMotoristas({ incluirInativos = false } = {}) {
-    let query = supabase
-        .from("motoristas")
-        .select("*")
-        .order("created_at", { ascending: false });
+    const where = {};
+    if (!incluirInativos) where.status = "ativo";
 
-    if (incluirInativos) query = query.eq("status", "ativo");
-
-    
-    const { data, error } = await query;
-    
-    if (error) throw error;
+    const data = await prisma.motorista.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
 
     return data;
 }
 
 export async function getMotoristaById(id) {
-    const { data, error } = await supabase
-        .from("motoristas")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.motorista.findUnique({
+      where: { id },
+    });
     return data;
 }
 
-export async function updateMotorista(id, payload) {
-    const { data, error } = await supabase
-        .from("motoristas")
-        .update({
-            nome: payload.nome,
-            cpf: payload.cpf,
-            cnh: payload.cnh,
-            validade_cnh: payload.validade_cnh,
-            data_nascimento: payload.data_nascimento,
-            telefone: payload.telefone
-        })
-        .eq("id", id)
-        .select()
-        .single();
+export async function listMotoristasPaginated({ page = 1, limit = 20, search = '', status = '' }) {
+    const { skip, take } = paginate({ page, limit });
+    const where = {};
+    if (status) where.status = status;
+    if (search) where.nome = { contains: search, mode: 'insensitive' };
 
-    if (error) throw error;
+    const [data, total] = await Promise.all([
+        prisma.motorista.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.motorista.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, { page, limit });
+}
+
+export async function updateMotorista(id, payload) {
+    const data = await prisma.motorista.update({
+      where: { id },
+      data: {
+        nome: payload.nome,
+        cpf: payload.cpf,
+        cnh: payload.cnh,
+        validadeCnh: payload.validade_cnh ? new Date(payload.validade_cnh) : undefined,
+        dataNascimento: payload.data_nascimento ? new Date(payload.data_nascimento) : undefined,
+        telefone: payload.telefone,
+      },
+    });
     return data;
 }
 
 export async function setMotoristaStatus(id, status) {
-    const { data, error } = await supabase
-        .from("motoristas")
-        .update({ status })
-        .eq("id", id)
-        .select()
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.motorista.update({
+      where: { id },
+      data: { status },
+    });
     return data;
 }

@@ -1,275 +1,339 @@
-import { useState, useEffect } from "react";
-import { useAuth } from "../hooks/useAuth";
-import api from "../services/api";
-import { useToast } from "../hooks/useToast";
-import { FaUserEdit, FaSave, FaLock, FaKey } from "react-icons/fa";
-import { GlobalLoader } from "../components/GlobalLoader";
+import { useState, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { useAuth } from "../hooks/useAuth"
+import api from "../services/api"
+import { useToast } from "../hooks/useToast"
+import { UserPen, Save, Eye, EyeOff, Mail, Phone, Calendar, Fingerprint, IdCard, Droplets } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form"
+import { perfilSchema, senhaSchema } from "../schemas/perfil"
+
+const fmtDate = (d) => { if (!d) return ""; try { const m = String(d).slice(0,10).split('-'); return m.length===3 ? `${m[2]}/${m[1]}/${m[0]}` : new Date(d).toLocaleDateString("pt-BR") } catch { return d } }
+const fmtCPF = (v) => { if (!v) return ""; const d = v.replace(/\D/g, ""); return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : v }
+const fmtPhone = (v) => { if (!v) return ""; const d = v.replace(/\D/g, ""); return d.length === 11 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}` : d.length === 10 ? `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}` : v }
+
+const REQUISITOS_SENHA = [
+  { test: (s) => s.length >= 6, label: "Mínimo 6 caracteres" },
+  { test: (s) => /[A-Z]/.test(s), label: "Uma letra maiúscula" },
+  { test: (s) => /[0-9]/.test(s), label: "Um número" },
+  { test: (s) => /[^A-Za-z0-9]/.test(s), label: "Um caractere especial" },
+]
+
+const infoFields = [
+  { key: "nome", label: "Nome completo", icon: UserPen },
+  { key: "email", label: "Email", icon: Mail },
+  { key: "rg", label: "RG", icon: IdCard },
+  { key: "cpf", label: "CPF", icon: Fingerprint, fmt: fmtCPF },
+  { key: "telefone", label: "Telefone", icon: Phone, fmt: fmtPhone },
+  { key: "dataNascimento", label: "Data de nascimento", icon: Calendar, fmt: fmtDate },
+  { key: "tipoSanguineo", label: "Tipo sanguíneo", icon: Droplets },
+]
+
+const infoFieldsAdmin = [
+  { key: "nome", label: "Nome completo", icon: UserPen },
+  { key: "email", label: "Email", icon: Mail },
+]
+
+const editFieldsAluno = [
+  { key: "nome", label: "Nome completo" },
+  { key: "rg", label: "RG" },
+  { key: "cpf", label: "CPF" },
+  { key: "telefone", label: "Telefone" },
+  { key: "dataNascimento", label: "Data de nascimento", type: "date" },
+  { key: "tipoSanguineo", label: "Tipo sanguíneo" },
+]
+
+const editFieldsAdmin = [
+  { key: "nome", label: "Nome completo" },
+]
 
 export default function Perfil() {
-  const { user } = useAuth();
-  const { showToast } = useToast();
+  const { user } = useAuth()
+  const { showToast } = useToast()
 
-  const [perfil, setPerfil] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [editando, setEditando] = useState(false);
-  const [salvando, setSalvando] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState("dados");
+  const [perfil, setPerfil] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [editando, setEditando] = useState(false)
+  const [salvando, setSalvando] = useState(false)
+  const [abaAtiva, setAbaAtiva] = useState("dados")
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [senhaValida, setSenhaValida] = useState(null)
+  const [validandoSenha, setValidandoSenha] = useState(false)
 
-  // Campos de senha
-  const [senhaAtual, setSenhaAtual] = useState("");
-  const [novaSenha, setNovaSenha] = useState("");
-  const [confirmarSenha, setConfirmarSenha] = useState("");
-  const [forcaSenha, setForcaSenha] = useState({ nivel: "vazia", cor: "gray", texto: "Vazia" });
-  const [salvandoSenha, setSalvandoSenha] = useState(false);
+  const perfilForm = useForm({
+    resolver: zodResolver(perfilSchema),
+    defaultValues: { nome: "", email: "", rg: "", cpf: "", telefone: "", dataNascimento: "", tipoSanguineo: "" },
+  })
 
-  const isAluno = user?.tipo === "aluno";
+  const senhaForm = useForm({
+    resolver: zodResolver(senhaSchema),
+    defaultValues: { senhaAtual: "", novaSenha: "", confirmarSenha: "" },
+  })
 
-  const camposAluno = [
-    { key: "nome", label: "Nome completo" },
-    { key: "rg", label: "RG" },
-    { key: "cpf", label: "CPF" },
-    { key: "telefone", label: "Telefone" },
-    { key: "endereco", label: "Endereço" },
-    { key: "data_nascimento", label: "Data de nascimento", type: "date" },
-    { key: "tipo_sanguineo", label: "Tipo sanguíneo" },
-  ];
+  const isAluno = user?.tipo === "aluno"
+  const fields = isAluno ? infoFields : infoFieldsAdmin
+  const editFields = isAluno ? editFieldsAluno : editFieldsAdmin
 
-  const camposAdmin = [{ key: "nome", label: "Nome completo" }];
-  const campos = isAluno ? camposAluno : camposAdmin;
+  const senhaAtualValue = senhaForm.watch("senhaAtual")
+  const novaSenhaValue = senhaForm.watch("novaSenha")
 
-  // 🔹 Lógica de força da senha
-  function avaliarForcaSenha(senha) {
-    if (!senha) return { nivel: "vazia", cor: "gray", texto: "Vazia" };
+  useEffect(() => {
+    if (!senhaAtualValue) { setSenhaValida(null); setValidandoSenha(false); return }
+    setValidandoSenha(true)
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.post("/usuario/me/validar-senha", { senha: senhaAtualValue })
+        setSenhaValida(data?.valida ?? null)
+      } catch { setSenhaValida(false) }
+      setValidandoSenha(false)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [senhaAtualValue])
 
-    let nivel = 0;
-    if (senha.length >= 6) nivel++;
-    if (/[A-Z]/.test(senha)) nivel++;
-    if (/[0-9]/.test(senha)) nivel++;
-    if (/[^A-Za-z0-9]/.test(senha)) nivel++;
-
-    if (nivel <= 1) return { nivel: "fraca", cor: "#e74c3c", texto: "Fraca" };
-    if (nivel === 2) return { nivel: "media", cor: "#f39c12", texto: "Média" };
-    return { nivel: "forte", cor: "#2ecc71", texto: "Forte" };
+  function forcaSenha(senha) {
+    if (!senha) return { nivel: 0, cor: "bg-muted", texto: "" }
+    const cumpridos = REQUISITOS_SENHA.filter((r) => r.test(senha)).length
+    const map = { 0: { cor: "bg-red-500", texto: "Muito fraca" }, 1: { cor: "bg-orange-500", texto: "Fraca" }, 2: { cor: "bg-yellow-500", texto: "Média" }, 3: { cor: "bg-lime-500", texto: "Boa" }, 4: { cor: "bg-green-500", texto: "Forte" } }
+    return { nivel: cumpridos, ...map[cumpridos] }
   }
 
-  // 🔹 Carregar perfil
+  const senhaInfo = forcaSenha(novaSenhaValue)
+
   useEffect(() => {
     async function fetchPerfil() {
       try {
-        const endpoint = isAluno ? "/alunos/me" : "/usuario/me";
-        const { data } = await api.get(endpoint);
-        setPerfil(isAluno ? { ...data, ...data.usuarios } : data);
-      } catch (error) {
-        const msg = error.response?.data?.message || "Erro ao carregar perfil.";
-        showToast(msg, "error");
+        const endpoint = isAluno ? "/alunos/me" : "/usuario/me"
+        const { data } = await api.get(endpoint)
+        setPerfil(data)
+      } catch {
+        showToast("error", "Erro ao carregar perfil.")
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
     }
-    fetchPerfil();
-  }, [isAluno]);
+    fetchPerfil()
+  }, [isAluno, showToast])
 
-  // Atualiza força da senha conforme o usuário digita
-  useEffect(() => {
-    setForcaSenha(avaliarForcaSenha(novaSenha));
-  }, [novaSenha]);
-
-  // 🔹 Salvar dados pessoais
-  async function handleSalvar() {
+  async function handleSalvar(data) {
     try {
-      setSalvando(true);
-      const endpoint = isAluno ? "/alunos/me" : "/usuario/me";
-      if (isAluno) {
-        const updatedPerfil = { nome: perfil.nome, rg: perfil.rg, cpf: perfil.cpf, telefone: perfil.telefone, endereco: perfil.endereco, data_nascimento: perfil.data_nascimento, tipo_sanguineo: perfil.tipo_sanguineo };
-        await api.put(endpoint, updatedPerfil);
-      } else {
-        const updatedPerfil = { nome: perfil.nome };
-        await api.put(endpoint, updatedPerfil);
-      }
-      showToast("Perfil atualizado com sucesso!", "success");
-      setEditando(false);
+      setSalvando(true)
+      const endpoint = isAluno ? "/alunos/me" : "/usuario/me"
+      await api.put(endpoint, data)
+      setPerfil((prev) => ({ ...prev, ...data }))
+      showToast("success", "Perfil atualizado com sucesso!")
+      setEditando(false)
     } catch {
-      showToast("Erro ao atualizar perfil.", "error");
+      showToast("error", "Erro ao atualizar perfil.")
     } finally {
-      setSalvando(false);
+      setSalvando(false)
     }
   }
 
-  // 🔹 Alterar senha
-  async function handleAlterarSenha() {
-    if (!senhaAtual || !novaSenha || !confirmarSenha) {
-      showToast("Preencha todos os campos de senha.", "warning");
-      return;
-    }
-
-    if (novaSenha !== confirmarSenha) {
-      showToast("As senhas novas não coincidem.", "error");
-      return;
-    }
-
+  async function handleAlterarSenha(data) {
     try {
-      setSalvandoSenha(true);
-      await api.put("/usuario/me/senha", { senhaAtual, novaSenha });
-      showToast("Senha alterada com sucesso!", "success");
-      setSenhaAtual("");
-      setNovaSenha("");
-      setConfirmarSenha("");
+      setSalvandoSenha(true)
+      await api.put("/usuario/me/senha", { senhaAtual: data.senhaAtual, novaSenha: data.novaSenha })
+      showToast("success", "Senha alterada com sucesso!")
+      senhaForm.reset()
     } catch {
-      showToast("Erro ao alterar senha.", "error");
+      showToast("error", "Erro ao alterar senha.")
     } finally {
-      setSalvandoSenha(false);
+      setSalvandoSenha(false)
     }
   }
 
-  if (loading) return <GlobalLoader />;
-  if (!perfil) return <p>Perfil não encontrado.</p>;
+  const handleCancel = () => {
+    setEditando(false);
+    perfilForm.reset();
+  };
+
+  const handleEdit = () => {
+    setEditando(true)
+    perfilForm.reset({
+      nome: perfil.nome || "",
+      email: user?.email || perfil.email || "",
+      rg: perfil.rg || "",
+      cpf: perfil.cpf || "",
+      telefone: perfil.telefone || "",
+      dataNascimento: perfil.dataNascimento || "",
+      tipoSanguineo: perfil.tipoSanguineo || "",
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto space-y-6">
+        <Skeleton className="h-12 w-48" />
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    )
+  }
+
+  if (!perfil) return <p className="text-center text-muted-foreground py-12">Perfil não encontrado.</p>
+
+  const nomeIniciais = (perfil.nome || user?.nome || "U").split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase()
 
   return (
-    <div className="max-w-3xl mx-auto bg-white p-8 rounded-2xl shadow-lg transition-all duration-300">
-      <h1 className="text-3xl font-semibold text-gray-800 mb-6">Meu Perfil</h1>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <Avatar className="w-12 h-12">
+          <AvatarFallback className="text-lg font-semibold">{nomeIniciais}</AvatarFallback>
+        </Avatar>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Meu Perfil</h1>
+          <p className="text-sm text-muted-foreground">{isAluno ? "Aluno" : "Usuário"} • {perfil.email || user?.email}</p>
+        </div>
+      </div>
 
-      {/* Abas */}
-      <div className="flex border-b mb-8">
-        <button
-          className={`px-5 py-2 font-medium transition-all duration-200 ${
-            abaAtiva === "dados"
-              ? "border-b-4 border-blue-600 text-blue-700"
-              : "text-gray-500 hover:text-blue-600"
-          }`}
-          onClick={() => setAbaAtiva("dados")}
-        >
+      <div className="flex gap-1 border-b">
+        <button onClick={() => setAbaAtiva("dados")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${abaAtiva === "dados" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           Dados Pessoais
         </button>
-        <button
-          className={`px-5 py-2 font-medium transition-all duration-200 ${
-            abaAtiva === "senha"
-              ? "border-b-4 border-blue-600 text-blue-700"
-              : "text-gray-500 hover:text-blue-600"
-          }`}
-          onClick={() => setAbaAtiva("senha")}
-        >
+        <button onClick={() => setAbaAtiva("senha")} className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-[1px] ${abaAtiva === "senha" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
           Alterar Senha
         </button>
       </div>
 
-      {/* ----------------------------- ABA DADOS PESSOAIS ----------------------------- */}
       {abaAtiva === "dados" && (
-        <div className="animate-fadeIn">
-          <div className="flex justify-end mb-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Informações Pessoais</CardTitle>
             {!editando ? (
-              <button
-                onClick={() => setEditando(true)}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                <FaUserEdit /> Editar Dados
-              </button>
+              <Button variant="outline" size="sm" onClick={handleEdit}>
+                <UserPen size={14} className="mr-1" /> Editar
+              </Button>
             ) : (
-              <button
-                onClick={handleSalvar}
-                disabled={salvando}
-                className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
-              >
-                {salvando ? "Salvando..." : <><FaSave /> Salvar</>}
-              </button>
-            )}
-          </div>
-
-          <form className="space-y-5">
-            {campos.map(({ key, label, type }) => (
-              <div key={key}>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">{label}</label>
-                <input
-                  type={type || "text"}
-                  value={perfil[key] || ""}
-                  disabled={!editando}
-                  onChange={(e) => setPerfil({ ...perfil, [key]: e.target.value })}
-                  className={`w-full p-2 border rounded-md transition-all ${
-                    editando
-                      ? "border-gray-300 focus:ring-2 focus:ring-blue-500"
-                      : "bg-gray-100 text-gray-600 cursor-not-allowed border-gray-200"
-                  }`}
-                />
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={handleCancel}>Cancelar</Button>
+                <Button size="sm" onClick={perfilForm.handleSubmit(handleSalvar)} disabled={salvando}>
+                  <Save size={14} className="mr-1" /> {salvando ? "Salvando..." : "Salvar"}
+                </Button>
               </div>
-            ))}
-          </form>
-        </div>
+            )}
+          </CardHeader>
+          <CardContent>
+            {!editando ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {fields.map(({ key, label, icon, fmt }) => {
+                  const Icon = icon
+                  return (
+                  <div key={key} className="flex items-start gap-3 p-3 rounded-lg bg-muted/30">
+                    <Icon size={16} className="text-primary mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                      <p className="text-sm text-foreground font-medium truncate">{fmt ? fmt(perfil[key]) : perfil[key] || "—"}</p>
+                    </div>
+                  </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <Form {...perfilForm}>
+                <div className="space-y-4">
+                  {editFields.map(({ key, label, type }) => (
+                    <FormField key={key} control={perfilForm.control} name={key} render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{label}</FormLabel>
+                        <FormControl>
+                          <Input {...field} type={type || "text"} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )} />
+                  ))}
+                  <FormField control={perfilForm.control} name="email" render={({ field }) => (
+                    <input type="hidden" {...field} />
+                  )} />
+                </div>
+              </Form>
+            )}
+          </CardContent>
+        </Card>
       )}
 
-      {/* ----------------------------- ABA SENHA ----------------------------- */}
       {abaAtiva === "senha" && (
-        <div className="animate-fadeIn">
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 space-y-6">
-            {/* Senha atual */}
-            <div>
-              <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                <FaKey /> Senha Atual
-              </h3>
-              <input
-                type="password"
-                placeholder="Digite sua senha atual"
-                value={senhaAtual}
-                onChange={(e) => setSenhaAtual(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Alterar Senha</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form {...senhaForm}>
+              <form onSubmit={senhaForm.handleSubmit(handleAlterarSenha)} className="space-y-5">
+                <FormField control={senhaForm.control} name="senhaAtual" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Senha atual</FormLabel>
+                    <div className="relative">
+                      <FormControl>
+                        <Input {...field} type={mostrarSenha ? "text" : "password"} placeholder="••••••••" className="pr-16" />
+                      </FormControl>
+                      <button type="button" onClick={() => setMostrarSenha(!mostrarSenha)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                        {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                      {senhaAtualValue && (
+                        <span className="absolute right-10 top-1/2 -translate-y-1/2 text-sm">
+                          {validandoSenha ? <span className="text-muted-foreground">⋯</span> : senhaValida ? <span className="text-green-600">✓</span> : <span className="text-red-500">✗</span>}
+                        </span>
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
-            <hr className="border-gray-300" />
+                <hr className="border-border" />
 
-            {/* Nova senha */}
-            <div>
-              <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                <FaLock /> Nova Senha
-              </h3>
+                <FormField control={senhaForm.control} name="novaSenha" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nova senha</FormLabel>
+                    <FormControl>
+                      <Input {...field} type={mostrarSenha ? "text" : "password"} placeholder="Mínimo 6 caracteres" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
-              <div className="space-y-4">
-                <input
-                  type="password"
-                  placeholder="Digite a nova senha"
-                  value={novaSenha}
-                  onChange={(e) => setNovaSenha(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-
-                {/* Barra de força */}
-                {novaSenha && (
-                  <div>
-                    <div
-                      className="h-2 rounded-md transition-all"
-                      style={{
-                        background: `linear-gradient(90deg, ${forcaSenha.cor} 0%, ${forcaSenha.cor} 100%)`,
-                      }}
-                    ></div>
-                    <p
-                      className="text-sm mt-1 font-medium"
-                      style={{ color: forcaSenha.cor }}
-                    >
-                      Força: {forcaSenha.texto}
-                    </p>
+                {novaSenhaValue && (
+                  <div className="mt-2 space-y-2">
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-300 ${senhaInfo.cor}`} style={{ width: `${(senhaInfo.nivel / 4) * 100}%` }} />
+                    </div>
+                    <p className="text-xs text-muted-foreground">Força: {senhaInfo.texto}</p>
+                    <ul className="space-y-0.5">
+                      {REQUISITOS_SENHA.map((r) => {
+                        const ok = r.test(novaSenhaValue)
+                        return (
+                          <li key={r.label} className={`text-xs flex items-center gap-1.5 ${ok ? "text-green-600" : "text-muted-foreground"}`}>
+                            <span>{ok ? "✓" : "○"}</span> {r.label}
+                          </li>
+                        )
+                      })}
+                    </ul>
                   </div>
                 )}
 
-                <input
-                  type="password"
-                  placeholder="Confirme a nova senha"
-                  value={confirmarSenha}
-                  onChange={(e) => setConfirmarSenha(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
+                <FormField control={senhaForm.control} name="confirmarSenha" render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirmar nova senha</FormLabel>
+                    <FormControl>
+                      <Input {...field} type={mostrarSenha ? "text" : "password"} placeholder="Repita a nova senha" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )} />
 
-            <div className="flex justify-end">
-              <button
-                onClick={handleAlterarSenha}
-                disabled={salvandoSenha}
-                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-              >
-                {salvandoSenha ? "Salvando..." : <><FaSave /> Atualizar Senha</>}
-              </button>
-            </div>
-          </div>
-        </div>
+                <Button type="submit" className="w-full" disabled={salvandoSenha}>
+                  <Save size={14} className="mr-1" /> {salvandoSenha ? "Salvando..." : "Atualizar Senha"}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       )}
     </div>
-  );
+  )
 }

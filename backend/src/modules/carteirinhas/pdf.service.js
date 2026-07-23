@@ -1,58 +1,43 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import * as functionUtils from '../../utils/functions.js';
-import { supabase } from '../../config/supabase.js'; 
+import { getSignedUrl } from '../../config/storage.js';
+import { logger } from '../../config/logger.js';
 
-// --- FUNÇÕES AUXILIARES ---
-
-// Função para buscar imagem do Supabase Storage
 async function fetchImageBuffer(url) {
     if (!url || typeof url !== 'string' || url.length < 5) return null;
-    
-    const bucketName = process.env.BUCKET_NAME;
 
     try {
-        const { data, error } = await supabase.storage
-            .from(bucketName)
-            .createSignedUrl(url, 60);
-
-        if (error || !data?.signedUrl) {
-            console.error("Erro ao criar URL assinada:", error || "URL não retornada.");
-            return null; 
-        }
-
-        const signedUrl = data.signedUrl;
-        
+        const signedUrl = await getSignedUrl(url, 60);
         const res = await fetch(signedUrl);
-        
+
         if (res.ok) {
             const arr = new Uint8Array(await res.arrayBuffer());
             return Buffer.from(arr);
         } else {
-            console.error(`Erro ao fazer fetch da imagem (Status: ${res.status}):`, signedUrl);
+            logger.error({ status: res.status, url: signedUrl }, 'Erro ao fazer fetch da imagem');
         }
     } catch (error) {
-        console.error("Erro geral no fetchImageBuffer:", error);
+        logger.error({ err: error }, "Erro geral no fetchImageBuffer");
     }
     return null;
 }
-// --- FUNÇÃO PRINCIPAL ---
 
-export async function gerarCarteirinhaBuffer(alunoData, adminData, cursoData, carteirinhaData) {
-    // Dimensões do Cartão
-    const CARD_WIDTH = 10.2 * 28.35; // ~289.17 pts
-    const CARD_HEIGHT = 6.7 * 28.35;  // ~190.00 pts
-    
-    // Margens do PDF
+export async function gerarCarteirinhaBuffer(alunoData, adminData, cursoData, carteirinhaData, configData) {
+    const { logoUrl, nomeOrganizacao } = configData || {};
+    const orgName = nomeOrganizacao || 'PREFEITURA MUNICIPAL DE PIRAJUBA';
+
+    const CARD_WIDTH = 10.2 * 28.35;
+    const CARD_HEIGHT = 6.7 * 28.35;
+
     const MARGIN_X = 30;
     const MARGIN_Y = 30;
-    
-    // Dimensões dos Elementos
+
     const PHOTO_SIZE_W = 75;
     const PHOTO_SIZE_H = 95;
-    const QR_SIZE = 60;
-    
-    const doc = new PDFDocument({ size: 'A4', margin: 0 }); 
+    const QR_SIZE = 80;
+
+    const doc = new PDFDocument({ size: 'A4', margin: 0 });
     const chunks = [];
     doc.on('data', (c) => chunks.push(c));
     const endPromise = new Promise((resolve, reject) => {
@@ -60,163 +45,168 @@ export async function gerarCarteirinhaBuffer(alunoData, adminData, cursoData, ca
         doc.on('error', reject);
     });
 
-    // --- PRÉ-CARREGAR DADOS ---
-    const [fotoBuffer, qrDataUrl] = await Promise.all([
-        fetchImageBuffer(alunoData.foto_url), 
+    const [fotoBuffer, logoBuffer, qrDataUrl] = await Promise.all([
+        fetchImageBuffer(alunoData.foto_url),
+        fetchImageBuffer(logoUrl),
         QRCode.toDataURL(carteirinhaData.qrcode_token),
     ]);
     const qrBuffer = Buffer.from(qrDataUrl.split(',')[1], 'base64');
-    
+
     // --- FRENTE DO CARTÃO ---
-    
-    // 1. FUNDO E BORDAS DO CARTÃO
+
     doc.save()
-        .translate(MARGIN_X, MARGIN_Y)
-        .rect(0, 0, CARD_WIDTH, CARD_HEIGHT)
+        .roundedRect(MARGIN_X, MARGIN_Y, CARD_WIDTH, CARD_HEIGHT, 6)
         .fill('#003366')
-        .rect(2, 2, CARD_WIDTH - 4, CARD_HEIGHT - 4)
+        .roundedRect(MARGIN_X + 2, MARGIN_Y + 2, CARD_WIDTH - 4, CARD_HEIGHT - 4, 5)
         .fill('white');
-        
-    // 2. HEADER DA PREFEITURA E TÍTULO
-    doc.fill('gray')
-       .fontSize(7)
-       .font('Helvetica')
-       .text("PREFEITURA MUNICIPAL DE PIRAJUBA", 0, 5, { width: CARD_WIDTH, align: 'center' });
-    
+
+    // Logo 20x20 no canto esquerdo
+    const LOGO_SIZE = 20;
+    const LOGO_X = MARGIN_X + 6;
+    const LOGO_Y = MARGIN_Y + 3;
+
+    if (logoBuffer) {
+        doc.save()
+            .roundedRect(LOGO_X, LOGO_Y, LOGO_SIZE, LOGO_SIZE, 4)
+            .clip()
+            .image(logoBuffer, LOGO_X, LOGO_Y, { width: LOGO_SIZE, height: LOGO_SIZE })
+            .restore();
+    } else {
+        doc.circle(LOGO_X + LOGO_SIZE / 2, LOGO_Y + LOGO_SIZE / 2, LOGO_SIZE / 2)
+            .fill('#003366');
+        doc.fillColor('white')
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text(orgName.charAt(0).toUpperCase(), LOGO_X + 6, LOGO_Y + 4);
+    }
+
+    // Nome da organização
+    doc.fill('#6B7280')
+        .fontSize(7)
+        .font('Helvetica')
+        .text(orgName, MARGIN_X, MARGIN_Y + 8, { width: CARD_WIDTH, align: 'center' });
+
+    // Título
     doc.fill('#003366')
-       .fontSize(13)
-       .font('Helvetica-Bold')
-       .text("CARTEIRA DE IDENTIFICAÇÃO ESTUDANTIL", 0, 18, { width: CARD_WIDTH, align: 'center' });
-             
-    doc.rect(10, 36, CARD_WIDTH - 20, 1)
-       .fill('#003366');
-       
-    // 3. ÁREA DA FOTO
-    const PHOTO_X = CARD_WIDTH - PHOTO_SIZE_W - 8;
-    const PHOTO_Y = 48;
-    
+        .fontSize(13)
+        .font('Helvetica-Bold')
+        .text("CARTEIRA DE IDENTIFICAÇÃO ESTUDANTIL", MARGIN_X, MARGIN_Y + 24, { width: CARD_WIDTH, align: 'center' });
+
+    // Linha separadora
+    doc.rect(MARGIN_X + 10, MARGIN_Y + 42, CARD_WIDTH - 20, 1)
+        .fill('#003366');
+
+    // Área da foto
+    const PHOTO_X = MARGIN_X + CARD_WIDTH - PHOTO_SIZE_W - 8;
+    const PHOTO_Y = MARGIN_Y + 54;
+
     if (fotoBuffer) {
         doc.image(fotoBuffer, PHOTO_X, PHOTO_Y, { width: PHOTO_SIZE_W, height: PHOTO_SIZE_H });
     } else {
-         doc.rect(PHOTO_X, PHOTO_Y, PHOTO_SIZE_W, PHOTO_SIZE_H)
-            .stroke('#CCCCCC')
-            .fill('white')
-            .fill('gray')
+        doc.roundedRect(PHOTO_X, PHOTO_Y, PHOTO_SIZE_W, PHOTO_SIZE_H, 3)
+            .lineWidth(1)
+            .stroke('#B0BEC5')
+            .fill('#F5F5F5');
+        doc.fill('#78909C')
+            .font('Helvetica')
             .fontSize(8)
-            .text('FOTO 3X4', PHOTO_X, PHOTO_Y + PHOTO_SIZE_H / 2 - 4, { width: PHOTO_SIZE_W, align: 'center' });
+            .text('FOTO', PHOTO_X, PHOTO_Y + PHOTO_SIZE_H / 2 - 4, { width: PHOTO_SIZE_W, align: 'center' });
     }
 
-    // 4. INFORMAÇÕES DO ALUNO
-    const INFO_X = 8;
-    let y_cursor = 50; 
-    
-    // NOME COMPLETO
-    doc.fill('black')
-       .font('Helvetica-Bold')
-       .fontSize(11)
-       .text(alunoData.nome.toUpperCase(), INFO_X, y_cursor, { width: CARD_WIDTH - PHOTO_SIZE_W - 20 });
-       
-    y_cursor += 20;
-    
-    // DADOS PESSOAIS
-    const DATA_WIDTH = CARD_WIDTH - PHOTO_SIZE_W - 20;
+    // Nome do aluno
+    const INFO_X = MARGIN_X + 8;
 
-    const addFlowData = (label, value) => {
-        doc.font('Helvetica-Bold').fontSize(8).text(label + ":", INFO_X, doc.y, { continued: true });
-        doc.font('Helvetica').fontSize(9).text(` ${value}`, { continued: false, width: DATA_WIDTH - doc.widthOfString(label + ":") - 5 });
-        doc.moveDown(0.1);
-    }
-    
-    doc.y = y_cursor;
-    
-    addFlowData("RG", alunoData.rg);
-    addFlowData("CPF", functionUtils.formatCPF(alunoData.cpf));
-    addFlowData("DATA NASC.", functionUtils.formatDate(alunoData.data_nascimento));
-    addFlowData("TEL.", functionUtils.formatTelefone(alunoData.telefone));
-    addFlowData("TIPO SANGUÍNEO", alunoData.tipo_sanguineo);
-    
-    y_cursor = doc.y + 5; 
+    doc.fill('#1A1A1A')
+        .font('Helvetica-Bold')
+        .fontSize(10)
+        .text(alunoData.nome.toUpperCase(), INFO_X, MARGIN_Y + 56, { width: CARD_WIDTH - PHOTO_SIZE_W - 22 });
 
-    // DADOS ACADÊMICOS
+    // Dados pessoais — usa doc.y dinâmico após o nome
+    let y = doc.y + 2;
+
+    const addField = (label, value) => {
+        doc.font('Helvetica-Bold').fontSize(7).fill('#37474F')
+            .text(label + ":", INFO_X, y, { continued: true });
+        doc.font('Helvetica').fontSize(8).fill('#1A1A1A')
+            .text(" " + (value || 'N/A'), { width: CARD_WIDTH - PHOTO_SIZE_W - 28 });
+        y = doc.y + 1;
+    };
+
+    addField("RG", alunoData.rg);
+    addField("CPF", functionUtils.formatCPF(alunoData.cpf));
+    addField("DATA NASC.", functionUtils.formatDate(alunoData.data_nascimento));
+    addField("TEL.", functionUtils.formatTelefone(alunoData.telefone));
+    addField("TIPO SANGUÍNEO", alunoData.tipo_sanguineo);
+
+    y += 3;
+
+    // Dados acadêmicos
     doc.fill('#003366')
-       .font('Helvetica-Bold')
-       .fontSize(9)
-       .text(`INSTITUIÇÃO: ${cursoData.faculdade_nome || 'N/A'}`, INFO_X, y_cursor, { width: DATA_WIDTH });
-    y_cursor = doc.y;
-    
-    doc.text(`CURSO: ${cursoData.nome || 'N/A'}`, INFO_X, y_cursor, { width: DATA_WIDTH });
-    y_cursor = doc.y + 10;
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text("INSTITUIÇÃO: " + (cursoData.faculdade_nome || 'N/A'), INFO_X, y, { width: CARD_WIDTH - PHOTO_SIZE_W - 22 });
+    y = doc.y;
+    doc.text("CURSO: " + (cursoData.nome || 'N/A'), INFO_X, y + 2, { width: CARD_WIDTH - PHOTO_SIZE_W - 22 });
+    y = doc.y + 8;
 
-    // VALIDADE
-    doc.fill('#CC0000') 
-       .font('Helvetica-Bold')
-       .fontSize(9)
-       .text(`VALIDADE: ${functionUtils.formatDate(carteirinhaData.data_validade)}`, INFO_X, y_cursor);
-
+    // Validade
+    doc.fill('#DC2626')
+        .font('Helvetica-Bold')
+        .fontSize(9)
+        .text("VALIDADE: " + functionUtils.formatDate(carteirinhaData.data_validade), INFO_X, y);
 
     doc.restore();
 
+    // --- VERSO DO CARTÃO ---
 
-    // --- VERSO DO CARTÃO (Card 2) ---
-    
-    const VERSO_Y = MARGIN_Y + CARD_HEIGHT + 5;
-    
-    // 1. FUNDO E BORDAS DO CARTÃO
+    const VERSO_Y = MARGIN_Y + CARD_HEIGHT + 10;
+
     doc.save()
-        .translate(MARGIN_X, VERSO_Y)
-        .rect(0, 0, CARD_WIDTH, CARD_HEIGHT)
+        .roundedRect(MARGIN_X, VERSO_Y, CARD_WIDTH, CARD_HEIGHT, 6)
         .fill('#003366')
-        .rect(2, 2, CARD_WIDTH - 4, CARD_HEIGHT - 4)
+        .roundedRect(MARGIN_X + 2, VERSO_Y + 2, CARD_WIDTH - 4, CARD_HEIGHT - 4, 5)
         .fill('white');
-        
-    // 2. QR CODE E ID DE AUTENTICAÇÃO
-    const QR_VERSO_X = CARD_WIDTH / 2 - QR_SIZE / 2;
-    const QR_VERSO_Y = 10;
-    
+
+    // Código de autenticação
     doc.fill('#003366')
-       .fontSize(10)
-       .font('Helvetica-Bold')
-       .text("CÓDIGO DE AUTENTICAÇÃO", 0, 5, { width: CARD_WIDTH, align: 'center' });
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text("CÓDIGO DE AUTENTICAÇÃO", MARGIN_X, VERSO_Y + 5, { width: CARD_WIDTH, align: 'center' });
 
-    doc.image(qrBuffer, QR_VERSO_X, QR_VERSO_Y + 5, { width: QR_SIZE, height: QR_SIZE });
-    
-    // ID DE AUTENTICAÇÃO
-    doc.fill('gray')
-       .font('Helvetica')
-       .fontSize(6)
-       .text(`ID: ${carteirinhaData.qrcode_token}`, 0, QR_VERSO_Y + QR_SIZE + 10, { width: CARD_WIDTH, align: 'center' });
+    // QR Code
+    const QR_VERSO_X = MARGIN_X + CARD_WIDTH / 2 - QR_SIZE / 2;
+    doc.image(qrBuffer, QR_VERSO_X, VERSO_Y + 15, { width: QR_SIZE, height: QR_SIZE });
 
+    // ID de autenticação
+    doc.fill('#6B7280')
+        .font('Helvetica')
+        .fontSize(6)
+        .text("ID: " + carteirinhaData.qrcode_token, MARGIN_X, VERSO_Y + QR_SIZE + 20, { width: CARD_WIDTH, align: 'center' });
 
-    // 3. REGULAMENTO
-    let regulamento_y = QR_VERSO_Y + QR_SIZE + 30; 
-
+    // Regulamento
+    let regY = VERSO_Y + QR_SIZE + 38;
     doc.fill('#003366')
-       .fontSize(10)
-       .font('Helvetica-Bold')
-       .text("REGULAMENTO DE USO DO TRANSPORTE", 0, regulamento_y, { width: CARD_WIDTH, align: 'center' });
-       
-    regulamento_y += 15;
-       
-    doc.fill('black')
-       .font('Helvetica')
-       .fontSize(7)
-       .list([
-           'A carteirinha é de uso pessoal e intransferível. Mau uso resultará na suspensão imediata do benefício.',
-           'O estudante deve apresentá-la ao embarcar, junto a um documento com foto.',
-           'É obrigatório manter o cadastro do aluno atualizado junto à Secretaria Municipal de Educação.',
-           'Em caso de perda, furto ou roubo, comunicar imediatamente à secretaria para emissão de nova via (sujeita a taxa).',
-       ], 10, regulamento_y, { lineHeight: 1.3, width: CARD_WIDTH - 20 });
-       
-    // 4. INFORMAÇÕES DE CONTATO 
-    const CONTACT_Y = CARD_HEIGHT - 30;
-    
-             
-    // 5. RODAPÉ DE EMISSÃO
-    doc.fill('black')
-       .fontSize(6)
-       .text(`Emitido digitalmente em: ${functionUtils.formatDate(new Date())} por ${adminData.nome}`, 
-             5, CONTACT_Y + 10, { width: CARD_WIDTH - 10, align: 'right' });
-             
+        .fontSize(10)
+        .font('Helvetica-Bold')
+        .text("REGULAMENTO DE USO DO TRANSPORTE", MARGIN_X, regY, { width: CARD_WIDTH, align: 'center' });
+
+    regY += 14;
+    doc.fill('#1A1A1A')
+        .font('Helvetica')
+        .fontSize(6.5)
+        .list([
+            'Uso pessoal e intransferível. Mau uso resulta em suspensão do benefício.',
+            'Apresentar a mesma ao embarcar.',
+            'Manter o cadastro atualizado junto à Secretaria de Educação.',
+            'Comunicar perda, furto ou roubo à secretaria para emissão de 2ª via (sujeita a taxa).',
+        ], MARGIN_X + 10, regY, { lineHeight: 1.2, width: CARD_WIDTH - 20 });
+
+    // Rodapé
+    doc.fill('#1A1A1A')
+        .fontSize(5.5)
+        .text("Emitido digitalmente em: " + functionUtils.formatDate(new Date()) + " por " + adminData.nome,
+              MARGIN_X + 5, VERSO_Y + CARD_HEIGHT - 12, { width: CARD_WIDTH - 10, align: 'right' });
+
     doc.restore();
 
     doc.end();

@@ -12,10 +12,10 @@ export const useSortableData = (items, config = null) => {
 
     const getSortIcon = (key) => {
         if (sortConfig.key !== key) {
-            return 'FaSort';
+            return 'ArrowUpDown';
         }
 
-        return sortConfig.direction === 'ascending' ? 'FaSortUp' : 'FaSortDown';
+        return sortConfig.direction === 'ascending' ? 'ArrowUp' : 'ArrowDown';
     };
 
     const sortedItems = useMemo(() => {

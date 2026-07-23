@@ -1,56 +1,77 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Layout from "./components/Layout";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom"
+import { Suspense, lazy } from "react"
+import ErrorBoundary from "./components/ErrorBoundary"
+import PublicLayout from "./layouts/PublicLayout"
+import AdminLayout from "./layouts/AdminLayout"
+import AuthLayout from "./layouts/AuthLayout"
+import ProtectedRoute from "./routes/ProtectedRoute"
 
-import Home from "./pages/Home";
-import Login from "./pages/Login";
-import Cadastro from "./pages/Cadastro";
-import AlunoDashboard from "./pages/Aluno/AlunoDashboard";
-import AdminDashboard from "./pages/Admin/AdminDashboard";
-import ReenvioDocumentos from "./pages/Aluno/ReenvioDocumentos";
-import AdminRequestDetail from "./pages/Admin/AdminRequestDetail";
-import AdminRotas from "./pages/Admin/AdminRotas";
-import AdminFaculdades from "./pages/Admin/AdminFaculdades";
-import AdminCursos from "./pages/Admin/AdminCursos";
-import AdminPontos from"./pages/Admin/AdminPontos";
-import AdminMotoristas from "./pages/Admin/AdminMotoristas";
-import AdminEscalas from "./pages/Admin/AdminEscalas";
-import AdminRelatorios from "./pages/Admin/AdminRelatorios";
-import Perfil from "./pages/Perfil";
-import MotoristaVolta from "./pages/MotoristaVolta";
-import AdminAlunos from "./pages/Admin/AdminAlunos";
-//import AcessoNegado from "./pages/AcessoNegado";
+const Login = lazy(() => import("./pages/auth/Login"))
+const Cadastro = lazy(() => import("./pages/auth/Cadastro"))
+const Home = lazy(() => import("./pages/Home"))
+const AlunoDashboard = lazy(() => import("./pages/Aluno/AlunoDashboard"))
+const ReenvioDocumentos = lazy(() => import("./pages/Aluno/ReenvioDocumentos"))
+const AdminDashboard = lazy(() => import("./pages/Admin/dashboard"))
+const AdminAlunos = lazy(() => import("./pages/Admin/alunos"))
+const AdminRotas = lazy(() => import("./pages/Admin/rotas"))
+const AdminFaculdades = lazy(() => import("./pages/Admin/faculdades"))
+const AdminCursos = lazy(() => import("./pages/Admin/cursos"))
+const AdminPontos = lazy(() => import("./pages/Admin/pontos"))
+const AdminMotoristas = lazy(() => import("./pages/Admin/motoristas"))
+const AdminEscalas = lazy(() => import("./pages/Admin/escalas"))
+const AdminRelatorios = lazy(() => import("./pages/Admin/relatorios"))
+const AdminRequestDetail = lazy(() => import("./pages/Admin/requests"))
+const Perfil = lazy(() => import("./pages/Perfil"))
+const MotoristaVolta = lazy(() => import("./pages/MotoristaVolta"))
 
+function LazyFallback() {
+  return (
+    <div className="h-50vh flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary" />
+    </div>
+  )
+}
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="perfil" element={<Perfil />} />
-          
-          <Route path="login" element={<Login />} />
-          <Route path="cadastro" element={<Cadastro />} />
-          <Route path="motorista/volta" element={<MotoristaVolta />} />
+      <ErrorBoundary>
+      <Suspense fallback={<LazyFallback />}>
+        <Routes>
+          <Route path="/login" element={<AuthLayout />}>
+            <Route index element={<Login />} />
+          </Route>
+          <Route path="/cadastro" element={<Cadastro />} />
 
-          <Route path="aluno" element={<AlunoDashboard />} />
-          <Route path="aluno/reenviar-documentos" element={<ReenvioDocumentos />} />
-          
+          <Route path="/" element={<PublicLayout />}>
+            <Route index element={<Home />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="perfil" element={<Perfil />} />
+            </Route>
+            <Route element={<ProtectedRoute requiredRole="aluno" />}>
+              <Route path="aluno" element={<AlunoDashboard />} />
+              <Route path="aluno/reenviar-documentos" element={<ReenvioDocumentos />} />
+            </Route>
+            <Route path="motorista/volta" element={<MotoristaVolta />} />
+          </Route>
 
-          <Route path="admin" element={<AdminDashboard />} />
-          <Route path="admin/requests/:id" element={<AdminRequestDetail />} />
-          <Route path="admin/rotas" element={<AdminRotas />} />
-          <Route path="admin/faculdades" element={<AdminFaculdades />} />
-          <Route path="admin/cursos" element={<AdminCursos />} />
-          <Route path="admin/pontos" element={<AdminPontos />} />
-          <Route path="admin/motoristas" element={<AdminMotoristas />} />
-          <Route path="admin/escalas" element={<AdminEscalas />} />
-          <Route path="admin/relatorios" element={<AdminRelatorios />} />
-          <Route path="admin/alunos" element={<AdminAlunos />} />
-          {/* <Route path="acesso-negado" element={<AcessoNegado />} /> */}
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboard />} />
+            <Route path="alunos" element={<AdminAlunos />} />
+            <Route path="rotas" element={<AdminRotas />} />
+            <Route path="faculdades" element={<AdminFaculdades />} />
+            <Route path="cursos" element={<AdminCursos />} />
+            <Route path="pontos" element={<AdminPontos />} />
+            <Route path="motoristas" element={<AdminMotoristas />} />
+            <Route path="escalas" element={<AdminEscalas />} />
+            <Route path="relatorios" element={<AdminRelatorios />} />
+            <Route path="requests/:id" element={<AdminRequestDetail />} />
+          </Route>
 
-        </Route>
-      </Routes>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+      </ErrorBoundary>
     </BrowserRouter>
-  );
+  )
 }

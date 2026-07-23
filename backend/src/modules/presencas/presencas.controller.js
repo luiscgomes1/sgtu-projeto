@@ -2,109 +2,65 @@ import { obterAluno } from '../alunos/alunos.service.js';
 import { obterRotaPorFaculdade } from '../rotaFaculdades/rotaFaculdades.service.js';
 import * as PresencasService from './presencas.service.js';
 import { validarQRCode } from '../carteirinhas/carteirinhas.service.js';
-
-export async function registrarPresencaManualController(req, res, next) {
-    try {
-        const { alunoId, pontoId } = req.body;
-
-        const data = await PresencasService.registrarPresencaManual(alunoId, pontoId);
-        res.status(201).json(data);
-    } catch (error) {
-        next(error);
-    }
-}
+import { ok, created, fail } from '../../utils/response.js';
+import { logger } from '../../config/logger.js';
 
 export async function listarPresencasPorRotaController(req, res, next) {
-    try {
-        const { rotaId } = req.params;
-        const { data } = req.query;
-        
-        const presencas = await PresencasService.listarPresencasPorRota(rotaId, data);
-        res.status(200).json(presencas);
-    } catch (error) {
-        next(error);
-    }
+    const { rotaId } = req.params;
+    const { data } = req.query;
+    const presencas = await PresencasService.listarPresencasPorRota(rotaId, data);
+    ok(res, presencas);
 }
 
 
 export async function listarPresencasPorAlunoController(req, res, next) {
-    try {
-        const { alunoId } = req.params;
-        
-        const presencas = await PresencasService.listarPresencasPorAluno(alunoId);
-        res.status(200).json(presencas);
-    } catch (error) {
-        next(error);
-    }
+    const { alunoId } = req.params;
+    const presencas = await PresencasService.listarPresencasPorAluno(alunoId);
+    ok(res, presencas);
 }
 
 export async function desativarPresencaController(req, res, next) {
-    try {
-        const { presencaId } = req.params;
-        
-        const result = await PresencasService.desativarPresenca(presencaId);
-        res.status(200).json(result);
-    } catch (error) {
-        next(error);
-    }
+    const { presencaId } = req.params;
+    const result = await PresencasService.desativarPresenca(presencaId);
+    ok(res, result);
 }
 
 export async function marcarPresencaController(req, res, next) {
-    try {
-        const alunoId = req.user.id;
-        const aluno = await obterAluno(alunoId);
-        
-        if(!alunoId) return res.status(400).json({ error: "Aluno é obrigatório" });
+    const alunoId = req.user.id;
+    if(!alunoId) return fail(res, 400, 'Aluno é obrigatório');
 
-        if(!aluno.cursos?.faculdade_id) return res.status(400).json({ error: "Aluno não está vinculado a nenhuma faculdade" });
-        
-        const rotaId = await obterRotaPorFaculdade(aluno.cursos?.faculdade_id);
+    const aluno = await obterAluno(alunoId);
 
-        if(!rotaId) return res.status(400).json({ error: "Não existe rota vinculada a faculdade do aluno" });
+    if(!aluno.curso?.faculdadeId) return fail(res, 400, 'Aluno não está vinculado a nenhuma faculdade');
 
-        console.log("ID do Aluno: ", aluno.usuario_id);
+    const rotaId = await obterRotaPorFaculdade(aluno.curso.faculdadeId);
 
-        const presenca = await PresencasService.marcarPresenca(aluno.usuario_id, rotaId);
-        res.status(201).json(presenca);
-    } catch (error) {
-        next(error);
-    }
+    if(!rotaId) return fail(res, 400, 'Não existe rota vinculada a faculdade do aluno');
+
+    logger.debug({ alunoId: aluno.usuarioId }, 'ID do Aluno');
+
+    const presenca = await PresencasService.marcarPresenca(aluno.usuarioId, rotaId);
+    created(res, presenca);
 }
 
 export async function confirmarEmbarqueController(req, res, next) {
-    try {
-        const { token } = req.body;
-
-        const alunoId = await validarQRCode(token);
-        if(!alunoId) return res.status(400).json({ error: "Token inválido" });
-
-        const presenca = await PresencasService.confirmarPresencaIdaQrCode(alunoId);
-
-        if(presenca.error) {
-            return res.status(400).json(presenca);
-        }
-        res.status(200).json(presenca);
-
-    } catch (error) {
-        next(error);
+    const { token } = req.body;
+    const alunoId = await validarQRCode(token);
+    if(!alunoId) return fail(res, 400, 'Token inválido');
+    const presenca = await PresencasService.confirmarPresencaIdaQrCode(alunoId);
+    if(presenca.error) {
+        return fail(res, 400, presenca.error);
     }
+    ok(res, presenca);
 }
 
 export async function confirmarVoltaController(req, res, next) {
-    try {
-        const { token } = req.body;
-
-        const alunoId = await validarQRCode(token);
-        if(!alunoId) return res.status(400).json({ error: "Token inválido" });
-
-        const presenca = await PresencasService.confirmarPresencaVoltaQrCode(alunoId);
-
-        if(presenca.error) {
-            return res.status(400).json(presenca);
-        }
-        res.status(200).json(presenca);
-
-    } catch (error) {
-        next(error);
+    const { token } = req.body;
+    const alunoId = await validarQRCode(token);
+    if(!alunoId) return fail(res, 400, 'Token inválido');
+    const presenca = await PresencasService.confirmarPresencaVoltaQrCode(alunoId);
+    if(presenca.error) {
+        return fail(res, 400, presenca.error);
     }
+    ok(res, presenca);
 }

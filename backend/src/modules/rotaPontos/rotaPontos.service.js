@@ -1,73 +1,52 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from "../../config/prisma.js";
 
-// Lista pontos de uma rota (join com tabela pontos)
 export async function listByRota(rotaId, { incluirInativos = false } = {}) {
-  let query = supabase
-    .from("rota_pontos")
-    .select(`
-      ordem,
-      status,
-      pontos (
-        id,
-        nome,
-        endereco,
-        status
-      )
-    `)
-    .eq("rota_id", rotaId)
-    .order("ordem", { ascending: true });
-
+  const where = { rotaId };
   if (!incluirInativos) {
-    query = query.eq("status", "ativo").eq("pontos.status", "ativo");
+    where.status = "ativo";
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
+  const data = await prisma.rotaPonto.findMany({
+    where,
+    include: {
+      ponto: {
+        select: { id: true, nome: true, endereco: true, status: true },
+      },
+    },
+    orderBy: { ordem: "asc" },
+  });
 
   return data;
 }
 
-// Atualiza ordem em batch
 export async function updateOrder(rotaId, ordens) {
-  const updates = ordens.map(({ id, ordem }) => ({
-    rota_id: rotaId,
-    ponto_id: id,
-    ordem,
-  }));
-
-  const { data, error } = await supabase
-    .from("rota_pontos")
-    .upsert(updates, { onConflict: "rota_id,ponto_id" })
-    .select();
-
-  if (error) throw error;
+  const data = await Promise.all(
+    ordens.map(({ id, ordem }) =>
+      prisma.rotaPonto.upsert({
+        where: { rotaId_pontoId: { rotaId, pontoId: id } },
+        update: { ordem },
+        create: { rotaId, pontoId: id, ordem },
+      })
+    )
+  );
   return data;
 }
 
-// Atualiza status de um ponto em uma rota
 export async function setStatus(rotaId, pontoId, status) {
-  const { data, error } = await supabase
-    .from("rota_pontos")
-    .update({ status })
-    .eq("rota_id", rotaId)
-    .eq("ponto_id", pontoId)
-    .select()
-    .single();
-
-  if (error) throw error;
+  const data = await prisma.rotaPonto.update({
+    where: { rotaId_pontoId: { rotaId, pontoId } },
+    data: { status },
+  });
   return data;
 }
 
 export async function isOrdered(rotaId) {
-    const { data, error } = await supabase
-      .from("rota_pontos")
-      .select("ordem")
-      .eq("rota_id", rotaId)
-      .order("ordem", { ascending: true });
+    const data = await prisma.rotaPonto.findMany({
+      where: { rotaId },
+      select: { ordem: true },
+      orderBy: { ordem: "asc" },
+    });
 
-    if (error) throw error;
-
-    // Verifica se a ordem está correta
     const isOrdered = data.every((item, index) => item.ordem === index + 1);
     return isOrdered;
 }

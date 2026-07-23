@@ -1,47 +1,31 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam, dateRegex, TIPOS_SANGUINEOS, nomeField, emailField, cpfField, telefoneField } from '../../shared/schemas.js';
 
-const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const timeRegex = /^(?:2[0-3]|[0-1]?[0-9]):[0-5][0-9]$/;
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+export const alunoUpdateSchema = z.object({
+    nome: nomeField.optional(),
+    rg: z.string().min(5, 'O RG deve ter pelo menos 5 caracteres').max(20, 'O RG deve ter no máximo 20 caracteres').optional(),
+    cpf: cpfField.optional().or(z.literal('')),
+    telefone: telefoneField.optional().or(z.literal('')),
+    endereco: z.string().max(255, 'O endereço deve ter no máximo 255 caracteres').optional().or(z.literal('')),
+    data_nascimento: z.string().regex(dateRegex, 'A data de nascimento deve estar no formato YYYY-MM-DD').optional().or(z.literal('')),
+    tipo_sanguineo: z.enum([...TIPOS_SANGUINEOS, '']).optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'Pelo menos um campo deve ser fornecido para atualização' });
 
-export const alunoUpdateSchema = Joi.object({
-    nome: Joi.string().min(3).max(100).optional().messages({
-        'string.min': 'O nome deve ter pelo menos {#limit} caracteres',
-        'string.max': 'O nome deve ter no máximo {#limit} caracteres',
-    }),
-    rg: Joi.string().min(5).max(20).optional().messages({
-        'string.min': 'O RG deve ter pelo menos {#limit} caracteres',
-        'string.max': 'O RG deve ter no máximo {#limit} caracteres',
-    }),
-    cpf: Joi.string().length(11).optional().allow('').messages({
-        'string.length': 'O CPF deve ter exatamente {#limit} caracteres',
-    }),
-    telefone: Joi.string().max(15).optional().allow(''),
-    endereco: Joi.string().max(255).optional().allow(''),
-    data_nascimento: Joi.string().pattern(dateRegex).optional().allow(null, ''),
-    tipo_sanguineo: Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-').optional().allow(''),
-}).min(1);
-
-export const alunoReenviarDocumentosSchema = Joi.object({
-    nome: Joi.string().min(3).max(100).required().messages({
-        'string.min': 'O nome deve ter pelo menos {#limit} caracteres',
-        'string.max': 'O nome deve ter no máximo {#limit} caracteres',
-    }),
-    email: Joi.string().email({ tlds: { allow: false } }).required(),
-    rg: Joi.string().max(20).required(),
-    cpf: Joi.string().length(11).required(),
-    telefone: Joi.string().max(15).required(),
-    data_nascimento: Joi.string().pattern(dateRegex).required(),
-    endereco: Joi.string().max(255).required(),
-    tipo_sanguineo: Joi.string().valid('A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-').required(),
-    curso_id: Joi.string().pattern(uuidRegex).required(),
-
-    // URLs de documentos (o service as marcará como pendentes no signup_requests)
-    comprovante_residencia_url: Joi.string().optional().allow(null, ''),
-    comprovante_matricula_url: Joi.string().optional().allow(null, ''),
-    foto_url: Joi.string().optional().allow(null, ''),
+export const alunoReenviarDocumentosSchema = z.object({
+    nome: nomeField,
+    email: emailField,
+    rg: z.string().max(20, 'O RG deve ter no máximo 20 caracteres'),
+    cpf: cpfField,
+    telefone: telefoneField,
+    data_nascimento: z.string().regex(dateRegex, 'A data de nascimento deve estar no formato YYYY-MM-DD'),
+    endereco: z.string().max(255, 'O endereço deve ter no máximo 255 caracteres'),
+    tipo_sanguineo: z.enum(TIPOS_SANGUINEOS),
+    curso_id: uuidParam,
+    comprovante_residencia_url: z.string().optional().or(z.literal('')),
+    comprovante_matricula_url: z.string().optional().or(z.literal('')),
+    foto_url: z.string().optional().or(z.literal('')),
 });
 
-export const alunoIdParamsSchema = Joi.object({
-    id: Joi.string().pattern(uuidRegex).label('ID do Aluno'),
+export const alunoIdParamsSchema = z.object({
+    id: uuidParam,
 });

@@ -1,108 +1,86 @@
-import { v4 as uuidv4 } from "uuid";
-import { supabase } from "../../config/supabase.js";
+import { randomUUID } from 'crypto';
+import { prisma } from "../../config/prisma.js";
+import { uploadFile, getSignedUrl } from "../../config/storage.js";
 import { gerarCarteirinhaBuffer } from "./pdf.service.js";
+import { truncDate } from "../../utils/functions.js";
+import { INCLUDE_FACULDADE } from '../../shared/includes.js';
 
 export async function gerarCarteirinha(alunoId, criadoPor) {
-  const { data: admin, error: adminError } = await supabase
-    .from("usuarios")
-    .select("nome")
-    .eq("id", criadoPor)
-    .eq("tipo", "admin")
-    .single();
+  const admin = await prisma.usuario.findUnique({
+    where: { id: criadoPor },
+  });
 
-  if (adminError || !admin) throw new Error("Apenas administradores podem gerar carteirinhas.");
-    
-  const { data: usuarioData, error: usuarioError } = await supabase
-    .from("usuarios")
-    .select("id, nome, email")
-    .eq("id", alunoId)
-    .single();
-  if (usuarioError || !usuarioData) throw new Error("Usuário não encontrado");
+  if (!admin || admin.tipo !== "admin") throw new Error("Apenas administradores podem gerar carteirinhas.");
 
-  const { data: alunoRow, error: alunoError } = await supabase
-    .from("alunos")
-    .select("*")
-    .eq("usuario_id", alunoId)
-    .single();
-  if (alunoError || !alunoRow) throw new Error("Aluno não encontrado ou não aprovado.");
+  const usuarioData = await prisma.usuario.findUnique({
+    where: { id: alunoId },
+  });
+  if (!usuarioData) throw new Error("Usuário não encontrado");
+
+  const aluno = await prisma.aluno.findUnique({
+    where: { usuarioId: alunoId },
+  });
+  if (!aluno) throw new Error("Aluno não encontrado ou não aprovado.");
 
   let cursoData = null;
-  if (alunoRow.curso_id) {
-    const { data: cursoRow, error: cursoError } = await supabase
-      .from("cursos")
-      .select("id, nome, faculdade_id")
-      .eq("id", alunoRow.curso_id)
-      .single();
-    if (!cursoError && cursoRow) {
-      const { data: faculdadeRow } = await supabase
-        .from("faculdades")
-        .select("id, nome")
-        .eq("id", cursoRow.faculdade_id)
-        .single();
+  if (aluno.cursoId) {
+    const curso = await prisma.curso.findUnique({
+      where: { id: aluno.cursoId },
+      include: INCLUDE_FACULDADE,
+    });
+    if (curso) {
       cursoData = {
-        nome: cursoRow.nome,
-        faculdade_nome: faculdadeRow.nome,
+        nome: curso.nome,
+        faculdade_nome: curso.faculdade?.nome,
       };
     }
   }
 
-  const token = uuidv4();
+  const config = await prisma.configuracao.findUnique({ where: { id: 1 } });
+  const configData = {
+    logoUrl: config?.logoUrl || null,
+    nomeOrganizacao: config?.nomeOrganizacao || null,
+  };
+
+  const token = randomUUID();
   const validade = new Date();
   validade.setFullYear(validade.getFullYear() + 1);
-  const validityStr = validade.toISOString().split("T")[0];
+  const validityStr = truncDate(validade);
 
-  const { data: created, error: insertError } = await supabase
-    .from("carteirinhas")
-    .insert([{
-      aluno_id: alunoId,
-      data_validade: validityStr,
-      qrcode_token: token,
-      criado_por: criadoPor
-    }])
-    .select()
-    .single();
-  if (insertError) throw new Error(insertError.message);
+  const created = await prisma.carteirinha.create({
+    data: {
+      alunoId,
+      dataValidade: new Date(validade),
+      qrcodeToken: token,
+      criadoPorId: criadoPor,
+    },
+  });
 
   const alunoData = {
     usuario_id: alunoId,
     nome: usuarioData.nome,
-    rg: alunoRow.rg,
-    cpf: alunoRow.cpf,
-    data_nascimento: alunoRow.data_nascimento,
-    telefone: alunoRow.telefone,
-    tipo_sanguineo: alunoRow.tipo_sanguineo,
-    foto_url: alunoRow.foto_url,
+    rg: aluno.rg,
+    cpf: aluno.cpf,
+    data_nascimento: aluno.dataNascimento,
+    telefone: aluno.telefone,
+    tipo_sanguineo: aluno.tipoSanguineo,
+    foto_url: aluno.fotoUrl,
   };
   const carteirinhaData = {
     qrcode_token: token,
     data_validade: validityStr,
   };
-  const pdfBuffer = await gerarCarteirinhaBuffer(alunoData, admin, cursoData, carteirinhaData);
+  const pdfBuffer = await gerarCarteirinhaBuffer(alunoData, admin, cursoData, carteirinhaData, configData);
 
-  const bucket = "carteirinhas";
-  const filePath = `carteirinhas/${alunoId}-${created.id}.pdf`;
-  const { error: uploadError } = await supabase.storage
-    .from(bucket)
-    .upload(filePath, pdfBuffer, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
-  if (uploadError) throw new Error(uploadError.message);
+  const filePath = `carteirinhas/${alunoId}/${created.id}.pdf`;
+  await uploadFile(filePath, pdfBuffer, "application/pdf");
+  await prisma.carteirinha.update({
+    where: { id: created.id },
+    data: { arquivoUrl: filePath },
+  });
+  const signedUrl = await getSignedUrl(filePath, 60 * 10);
 
-  await supabase
-    .from("carteirinhas")
-    .update({ arquivo_url: filePath })
-    .eq("id", created.id);
-
-    const { data: signed } = await supabase.storage
-      .from(bucket)
-      .createSignedUrl(filePath, 60 * 10); // 10 minutes
-
-    return {
-      signedUrl: signed?.signedUrl,
-      validade: validityStr,
-      message: "Carteirinha gerada com sucesso"
-    }
+  return { signedUrl, validade: validityStr, message: "Carteirinha gerada com sucesso" };
 }
 
 export async function obterCarteirinhaAtiva(alunoId, requester) {
@@ -110,25 +88,21 @@ export async function obterCarteirinhaAtiva(alunoId, requester) {
     throw new Error("Acesso negado");
   }
 
-  const hoje = new Date().toISOString().split("T")[0];
-  const { data, error } = await supabase
-    .from("carteirinhas")
-    .select("*")
-    .eq("aluno_id", alunoId)
-    .gte("data_validade", hoje)
-    .order("data_validade", { ascending: false })
-    .limit(1)
-    .single();
-  if (error) throw new Error(error.message);
+  const hoje = truncDate();
+
+  const data = await prisma.carteirinha.findFirst({
+    where: {
+      alunoId,
+      dataValidade: { gte: new Date(hoje) },
+    },
+    orderBy: { dataValidade: "desc" },
+  });
+
   if (!data) throw new Error("Nenhuma carteirinha válida encontrada");
 
-  // Gera o signedUrl temporário para o arquivo da carteirinha
   let signedUrl = null;
-  if (data.arquivo_url) {
-    const { data: signed } = await supabase.storage
-      .from("carteirinhas")
-      .createSignedUrl(data.arquivo_url, 60 * 10);
-    signedUrl = signed?.signedUrl || null;
+  if (data.arquivoUrl) {
+    signedUrl = await getSignedUrl(data.arquivoUrl, 60 * 10);
   }
 
   return {
@@ -141,49 +115,112 @@ export async function listarCarteirinhas(alunoId, requester) {
   if (requester.tipo !== "admin" && requester.id !== alunoId) {
     throw new Error("Acesso negado");
   }
-  const hoje = new Date().toISOString().split("T")[0];
-  const { data, error } = await supabase
-    .from("carteirinhas")
-    .select("*")
-    .eq("aluno_id", alunoId)
-    .gte("data_validade", hoje)
-    .order("data_validade", { ascending: false });
-  if (error) throw new Error(error.message);
+
+  const hoje = truncDate();
+
+  const data = await prisma.carteirinha.findMany({
+    where: {
+      alunoId,
+      dataValidade: { gte: new Date(hoje) },
+    },
+    orderBy: { dataValidade: "desc" },
+  });
+
   if (!data || data.length === 0) throw new Error("Nenhuma carteirinha válida encontrada");
 
-  const signed = await Promise.all(
-    data.map( async (carteirinha) => {
-      const { data: s } = await supabase.storage
-        .from("carteirinhas")
-        .createSignedUrl(carteirinha.arquivo_url, 60 * 10);
-        return { ...carteirinha, signedUrl: s?.signedUrl };
+  const comSignedUrls = await Promise.all(
+    data.map(async (carteirinha) => {
+      if (!carteirinha.arquivoUrl) return { ...carteirinha, signedUrl: null };
+      const signedUrl = await getSignedUrl(carteirinha.arquivoUrl, 60 * 10);
+      return { ...carteirinha, signedUrl };
     })
   );
 
-  data.arquivo_url = signed;
-  
-  return data;
+  return comSignedUrls;
 }
 
 export async function validarQRCode(token) {
+  const hoje = truncDate();
 
-  const hoje = new Date().toISOString().split("T")[0];
-  const { data: carteirinha, error } = await supabase
-    .from("carteirinhas")
-    .select("id, aluno_id, data_validade, qrcode_token")
-    .eq("qrcode_token", token)
-    .maybeSingle();
+  const carteirinha = await prisma.carteirinha.findUnique({
+    where: { qrcodeToken: token },
+  });
 
-  console.log("Validation token:", token);
-  console.log("Carteirinha data:", carteirinha);
-
-  if (error || !carteirinha) {
+  if (!carteirinha) {
     const invalid = new Error("Qr Code ou carteirinha inválida.");
     invalid.name = "UnauthorizedError";
     throw invalid;
   }
 
-  if (carteirinha.data_validade < hoje) throw new Error("Carteirinha está expirada.");
+  if (truncDate(carteirinha.dataValidade) < hoje) {
+    throw new Error("Carteirinha está expirada.");
+  }
 
-  return carteirinha.aluno_id;
+  return carteirinha.alunoId;
+}
+
+export async function gerarPreviewBuffer(alunoId) {
+  const usuario = await prisma.usuario.findUnique({ where: { id: alunoId } });
+  const aluno = await prisma.aluno.findUnique({ where: { usuarioId: alunoId } });
+  if (!usuario || !aluno) return null;
+
+  let cursoData = null;
+  if (aluno.cursoId) {
+    const curso = await prisma.curso.findUnique({
+      where: { id: aluno.cursoId },
+      include: INCLUDE_FACULDADE,
+    });
+    if (curso) {
+      cursoData = { nome: curso.nome, faculdade_nome: curso.faculdade?.nome };
+    }
+  }
+
+  const config = await prisma.configuracao.findUnique({ where: { id: 1 } });
+  const configData = {
+    logoUrl: config?.logoUrl || null,
+    nomeOrganizacao: config?.nomeOrganizacao || null,
+  };
+
+  const admin = { nome: 'Preview' };
+  const token = randomUUID();
+  const validade = new Date();
+  validade.setFullYear(validade.getFullYear() + 1);
+
+  const alunoData = {
+    usuario_id: alunoId, nome: usuario.nome, rg: aluno.rg,
+    cpf: aluno.cpf, data_nascimento: aluno.dataNascimento,
+    telefone: aluno.telefone, tipo_sanguineo: aluno.tipoSanguineo,
+    foto_url: aluno.fotoUrl,
+  };
+  const carteirinhaData = {
+    qrcode_token: token,
+    data_validade: truncDate(validade),
+  };
+
+  return gerarCarteirinhaBuffer(alunoData, admin, cursoData, carteirinhaData, configData);
+}
+
+export async function gerarPreviewMock() {
+  const mockAluno = {
+    usuario_id: '00000000-0000-0000-0000-000000000000',
+    nome: 'MARIA DA SILVA OLIVEIRA',
+    rg: 'MG-12.345.678',
+    cpf: '12345678901',
+    data_nascimento: '2005-03-15',
+    telefone: '34991234567',
+    tipo_sanguineo: 'O+',
+    foto_url: null,
+  };
+  const mockAdmin = { nome: 'Administrador Mock' };
+  const mockCurso = { nome: 'ENGENHARIA DE SOFTWARE', faculdade_nome: 'FACULDADE DE EDUCAÇÃO DE PIRAJUBA' };
+  const mockCarteirinha = {
+    qrcode_token: 'mock-qrcode-token-para-teste',
+    data_validade: '2027-12-31',
+  };
+  const mockConfig = {
+    logoUrl: null,
+    nomeOrganizacao: 'PREFEITURA MUNICIPAL DE PIRAJUBA',
+  };
+
+  return gerarCarteirinhaBuffer(mockAluno, mockAdmin, mockCurso, mockCarteirinha, mockConfig);
 }

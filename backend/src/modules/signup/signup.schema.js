@@ -1,51 +1,29 @@
-import Joi from "joi";
+import { z } from 'zod';
+import { uuidParam, dateRegex, TIPOS_SANGUINEOS, nomeField, emailField, senhaField, cpfField, telefoneField } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: "uuidv4" }).required().messages({
-  "string.guid": "O ID fornecido não é um UUID válido.",
-  "any.required": "O ID é obrigatório.",
-});
-const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-export const signupRequestSchema = Joi.object({
-  nome: Joi.string().min(3).max(100).required().messages({
-    "string.min": "O nome deve ter no mínimo 3 caracteres.",
-    "any.required": "O nome é obrigatório.",
-  }),
-  email: Joi.string()
-    .email({ tlds: { allow: false } })
-    .required()
-    .messages({
-      "string.email": "O e-mail deve ser válido.",
-      "any.required": "O e-mail é obrigatório.",
-    }),
-  senha: Joi.string().min(6).required().messages({
-    "string.min": "A senha deve ter no mínimo 6 caracteres.",
-    "any.required": "A senha é obrigatória.",
-  }),
-
-  rg: Joi.string().max(20).optional().allow(null, ""),
-  cpf: Joi.string().length(11).optional().allow(null, ""), 
-  telefone: Joi.string().max(15).optional().allow(null, ""),
-  data_nascimento: Joi.string().pattern(dateRegex).optional().allow(null, ""),
-  endereco: Joi.string().max(255).optional().allow(null, ""),
-  tipo_sanguineo: Joi.string()
-    .valid("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
-    .optional()
-    .allow(null, ""),
-  curso_id: uuidRegex.optional().allow(null),
-
-  comprovante_residencia_url: Joi.string().uri().optional().allow(null, ""),
-  comprovante_matricula_url: Joi.string().uri().optional().allow(null, ""),
-  foto_url: Joi.string().uri().optional().allow(null, ""),
+export const signupRequestSchema = z.object({
+  nome: nomeField,
+  email: emailField,
+  senha: senhaField,
+  rg: z.string().max(20, 'O RG deve ter no máximo 20 caracteres').optional().or(z.literal('')),
+  cpf: cpfField.optional().or(z.literal('')),
+  telefone: telefoneField.optional().or(z.literal('')),
+  data_nascimento: z.string().regex(dateRegex, 'A data de nascimento deve estar no formato YYYY-MM-DD').optional().or(z.literal('')),
+  endereco: z.string().max(255, 'O endereço deve ter no máximo 255 caracteres').optional().or(z.literal('')),
+  tipo_sanguineo: z.enum([...TIPOS_SANGUINEOS, '']).optional(),
+  curso_id: uuidParam.optional(),
+  comprovante_residencia_url: z.string().url().optional().or(z.literal('')),
+  comprovante_matricula_url: z.string().url().optional().or(z.literal('')),
+  foto_url: z.string().url().optional().or(z.literal('')),
 });
 
-export const signupUpdateDocsSchema = Joi.object({
-  comprovante_matricula_url: Joi.string().optional().allow(null, ""),
-  comprovante_residencia_url: Joi.string().optional().allow(null, ""),
-  foto_url: Joi.string().optional().allow(null, ""),
-  status: Joi.string().valid("pendente", "aprovado", "reprovado").optional(),
-}).min(1);
+export const signupUpdateDocsSchema = z.object({
+  comprovante_matricula_url: z.string().optional().or(z.literal('')),
+  comprovante_residencia_url: z.string().optional().or(z.literal('')),
+  foto_url: z.string().optional().or(z.literal('')),
+  status: z.enum(['pendente', 'ativo', 'reprovado']).optional(),
+}).refine(data => Object.keys(data).length > 0, { message: 'Pelo menos um campo deve ser fornecido para atualização' });
 
-export const requestIdParamsSchema = Joi.object({
-  id: uuidRegex.label("ID da Requisição"),
+export const requestIdParamsSchema = z.object({
+  id: uuidParam,
 });

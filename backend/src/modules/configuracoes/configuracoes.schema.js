@@ -1,13 +1,15 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { timeRegex } from '../../shared/schemas.js';
 
-const timeRegex = /^(?:2[0-3]|[0-1]?[0-9]):[0-5][0-9]$/;
+export const horaLimiteUpdateSchema = z.object({
+    horaLimite: z.string()
+        .regex(timeRegex, 'O campo hora deve estar no formato HH:mm (ex: 15:00).'),
+});
 
-export const horaLimiteUpdateSchema = Joi.object({
-    horaLimite: Joi.string()
-        .pattern(timeRegex)
-        .required()
-        .messages({
-            'string.pattern.base': 'O campo hora deve estar no formato HH:mm (ex: 15:00).',
-            'any.required': 'O campo hora é obrigatório'
-        }),
+export const logoUpdateSchema = z.object({
+    logoUrl: z.string().url('O campo logoUrl deve ser uma URL válida.').max(500, 'O campo logoUrl deve ter no máximo 500 caracteres').or(z.literal('')),
+});
+
+export const nomeOrganizacaoUpdateSchema = z.object({
+    nomeOrganizacao: z.string().min(3, 'O nome da organização deve ter no mínimo 3 caracteres.').max(100, 'O nome da organização deve ter no máximo 100 caracteres.'),
 });

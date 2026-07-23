@@ -1,285 +1,232 @@
-import { gethoraLimitePresenca } from '../configuracoes/configuracoes.service.js';
-import { supabase } from '../../config/supabase.js';
-import { ensureViagem } from '../viagens/viagens.service.js';
-import { formatHHMM } from '../../utils/functions.js';
-
-async function ensureCarteirinhaValidaOuAtualizaStatus(alunoUsuarioId) {
-    const hoje = new Date().toISOString().split('T')[0];
-    const { data: carteirinha, error: carteirinhaErr } = await supabase
-        .from('carteirinhas')
-        .select('id, data_validade')
-        .eq('aluno_id', alunoUsuarioId)
-        .gte('data_validade', hoje)
-        .order('data_validade', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-    if (carteirinhaErr) throw carteirinhaErr;
-
-    if (!carteirinha) {
-        const { error: updErr } = await supabase
-            .from('alunos')
-            .update({ status_cadastro: 'reprovado' })
-            .eq('usuario_id', alunoUsuarioId);
-        if (updErr) throw updErr;
-        throw new Error('Carteirinha inválida/expirada. Aluno marcado como reprovado.');
-    }
-}
+import { gethoraLimitePresenca } from '../configuracoes/configuracoes.service.js'
+import { prisma } from '../../config/prisma.js'
+import { ensureViagem } from '../viagens/viagens.service.js'
+import { formatHHMM } from '../../utils/functions.js'
+import { ensureCarteirinhaValidaOuAtualizaStatus } from '../../shared/validarCarteirinha.js'
+import { logger } from '../../config/logger.js'
+import { INCLUDE_ALUNO_STATUS, INCLUDE_ROTA_NOME, INCLUDE_USUARIO_NOME } from '../../shared/includes.js'
 
 export async function listarPresencasPorRota(rotaId, data) {
-    const filtroData = data || new Date().toISOString().split('T')[0];
+    const filtroData = data || new Date()
 
-    const { data: presencas, error } = await supabase
-        .from('presencas')
-        .select('*, alunos(usuario_id, usuarios(nome)), rotas(nome)')
-        .eq('rota_id', rotaId)
-        .eq('data', filtroData)
-        .eq('status', 'ativo');
+    const presencas = await prisma.presenca.findMany({
+        where: { rotaId, data: filtroData, status: 'ativo' },
+        include: {
+            rota: INCLUDE_ROTA_NOME.rota,
+            aluno: {
+                select: {
+                    usuarioId: true,
+                    usuario: INCLUDE_USUARIO_NOME.usuario,
+                }
+            }
+        }
+    })
 
-    if (error) throw error;
-    return presencas;
+    return presencas
 }
 
 export async function listarPresencasPorAluno(alunoId) {
-    const { data, error } = await supabase
-        .from('presencas')
-        .select('*, rotas(nome)')
-        .eq('aluno_id', alunoId)
-        .eq('status', 'ativo')
-        .order('data', { ascending: false });
-    
-    if (error) throw error;
-    return data;
+    const presencasPorAluno = await prisma.presenca.findMany({
+        where: { alunoId, status: 'ativo' },
+        include: {
+            rota: INCLUDE_ROTA_NOME.rota,
+        },
+        orderBy: { data: 'desc' }
+    })
+
+    return presencasPorAluno
 }
 
 export async function desativarPresenca(presencaId) {
-    const { data, error } = await supabase
-        .from('presencas')
-        .update({ status: 'inativo' })
-        .eq('id', presencaId)
-        .select()
-        .maybeSingle();
-    
-    if (error) throw error;
-    return data;
+    const data = await prisma.presenca.update({
+        where: { id: presencaId },
+        data: { status: 'inativo' },
+    })
+
+    return data
 }
 
 export async function marcarPresenca(alunoId, rotaId) {
-    await ensureCarteirinhaValidaOuAtualizaStatus(alunoId);
-    const hoje = new Date().toISOString().split('T')[0];
-    const viagem = await ensureViagem(rotaId, hoje);
+    await ensureCarteirinhaValidaOuAtualizaStatus(alunoId)
+    const hoje = new Date()
+    const viagem = await ensureViagem(rotaId, hoje)
 
-    const { data: aluno, error: alunoError } = await supabase
-        .from('alunos')
-        .select('status_cadastro, usuarios(tipo, status)')
-        .eq('usuario_id', alunoId)
-        .maybeSingle();
+    const aluno = await prisma.aluno.findUnique({
+        where: { usuarioId: alunoId },
+        include: { ...INCLUDE_ALUNO_STATUS }
+    })
+    
+    if(!aluno) throw new Error("Aluno não encontrado")
+    if(aluno.usuario.status !== "ativo") throw new Error("Aluno não está ativo no sistema")
+    if(aluno.usuario.tipo !== "aluno") throw new Error("Usuário não é do tipo aluno")
 
-    if(alunoError || !aluno) throw new Error("Aluno não encontrado");
-    if(aluno.usuarios?.status !== "ativo") throw new Error("Aluno não está ativo no sistema");
-    if(aluno.status_cadastro !== "aprovado") throw new Error("Aluno não está aprovado no sistema");
-    if(aluno.usuarios?.tipo !== "aluno") throw new Error("Usuário não é do tipo aluno");
-
-    const horaLimite = await gethoraLimitePresenca();
-    if(!horaLimite) throw new Error("Horário limite para marcar presença não está configurado no sistema");
-    const agora = new Date();
-    const [limiteHoras, limiteMinutos] = horaLimite.split(':').map(Number);
-    const limite = new Date();
-    limite.setHours(limiteHoras, limiteMinutos, 0, 0);
+    const horaLimite = await gethoraLimitePresenca()
+    if(!horaLimite) throw new Error("Horário limite para marcar presença não está configurado no sistema")
+    const agora = new Date()
+    const horaLimiteStr = typeof horaLimite === 'object'
+      ? `${String(horaLimite.getHours()).padStart(2, '0')}:${String(horaLimite.getMinutes()).padStart(2, '0')}`
+      : horaLimite;
+    const [limiteHoras, limiteMinutos] = horaLimiteStr.split(':').map(Number)
+    const limite = new Date()
+    limite.setHours(limiteHoras, limiteMinutos, 0, 0)
 
     if (agora > limite) {
-        throw new Error(`Horário limite para marcar presença é ${formatHHMM(limite)}.`);
+        throw new Error(`Horário limite para marcar presença é ${formatHHMM(limite)}.`)
     }
 
-    const { data: existing } = await supabase
-        .from('presencas')
-        .select('*')
-        .eq('aluno_id', alunoId)
-        .eq('data', hoje)
-        .maybeSingle();
+    const presencaExistente = await prisma.presenca.findFirst({
+        where: { alunoId, data: hoje }
+    })
 
-    if (existing) {
-        const { data, error } = await supabase
-            .from('presencas')
-            .update({
+
+    if (presencaExistente) {
+        const data = await prisma.presenca.update({
+            where: { id: presencaExistente.id },
+            data: { confirmado: true },
+        })
+
+        return { message: "Presença atualizada (pré-checkin)", data }
+    } else {
+        const data = await prisma.presenca.create({
+            data: {
+                alunoId,
+                rotaId,
+                viagemId: viagem.id,
+                data: hoje,
                 confirmado: true,
-            })
-            .eq('id', existing.id)
-            .select()
-            .maybeSingle();
-
-        if (error) throw error;
-        return { message: "Presença atualizada (pré-checkin)", data };
-    }
-
-    const { data, error } = await supabase
-        .from('presencas')
-        .insert([{
-            aluno_id: alunoId,
-            rota_id: rotaId,
-            viagem_id: viagem.id,
-            data: hoje,
-            confirmado: true,
-            confirmado_qrcode: false
-        }])
-        .select()
-        .single();
-
-    if (error) throw error;
-    return { message: "Presença confirmada com sucesso", data };        
+                confirmado_qrcode: false
+            }            
+        })
+        return { message: "Presença confirmada com sucesso", data }
+    }          
 }
 
 export async function confirmarPresencaIdaQrCode(alunoId) {
 
-    const hoje = new Date().toISOString().split('T')[0];
+    const hoje = new Date()
+    const agora = new Date()
 
-    const agora = new Date();
+    const horaInicioIda = process.env.QR_CODE_IDA_INICIO || "16:50"
+    const horaFimIda = process.env.QR_CODE_IDA_FIM || "18:00"
 
-    const horaInicioIda = "16:50";
-    const horaFimIda = "18:00";
+    const [hInicio, mInicio] = horaInicioIda.split(':').map(Number)
+    const [hFim, mFim] = horaFimIda.split(':').map(Number)
 
-    const [hInicio, mInicio] = horaInicioIda.split(':').map(Number);
-    const [hFim, mFim] = horaFimIda.split(':').map(Number);
+    const inicioIda = new Date()
+    inicioIda.setHours(hInicio, mInicio, 0, 0)
+    const fimIda = new Date()
+    fimIda.setHours(hFim, mFim, 0, 0)
 
-    const inicioIda = new Date();
-    inicioIda.setHours(hInicio, mInicio, 0, 0);
-    const fimIda = new Date();
-    fimIda.setHours(hFim, mFim, 0, 0);
+    if(agora < inicioIda) throw new Error(`A confirmação da ida só pode ser feita após as ${horaInicioIda}.`)
+    if(agora > fimIda) throw new Error(`A confirmação da ida só pode ser feita até as ${horaFimIda}.`)
 
-    if(agora < inicioIda) throw new Error(`A confirmação da ida só pode ser feita após as ${horaInicioIda}.`);
-    if(agora > fimIda) throw new Error(`A confirmação da ida só pode ser feita até as ${horaFimIda}.`);
+    const aluno = await prisma.aluno.findUnique({
+        where: { usuarioId: alunoId },
+        include: { ...INCLUDE_ALUNO_STATUS }
+    })
 
-    const { data: aluno, error: alunoError } = await supabase
-        .from('alunos')
-        .select('status_cadastro, usuarios(tipo, status)')
-        .eq('usuario_id', alunoId)
-        .maybeSingle();
+    if(!aluno) throw new Error("Aluno não encontrado")
+    if(aluno.usuario.status !== "ativo") throw new Error("Usuário não está ativo no sistema")
+    if(aluno.usuario.tipo !== "aluno") throw new Error("Usuário não é um aluno")
 
-    if(alunoError || !aluno) throw new Error("Aluno não encontrado");
-    if(aluno.usuarios.status !== "ativo") throw new Error("Usuário não está ativo no sistema");
-    if(aluno.status_cadastro !== "aprovado") throw new Error("Aluno não está aprovado no sistema");
-    if(aluno.usuarios.tipo !== "aluno") throw new Error("Usuário não é um aluno");
+    const presencaExistente = await prisma.presenca.findFirst({
+        where: { alunoId, data: hoje }
+    })
 
-    const { data: existing, error: findError } = await supabase
-        .from('presencas')
-        .select('*')
-        .eq('aluno_id', alunoId)
-        .eq('data', hoje)
-        .maybeSingle();
-
-    if (findError) throw findError;
-
-    if (!existing) return { message: "Aluno não marcou presença antes do embarque" };
+    if (!presencaExistente) return { message: "Aluno não marcou presença antes do embarque" }
 
     // Se já confirmarou a presença via QR code, lançar erro informativo
-    if (existing.confirmado_qrcode) {
-        throw new Error("Aluno já confirmou presença via QR Code");
+    if (presencaExistente.confirmadoQrcode) {
+        throw new Error("Aluno já confirmou presença via QR Code")
     }
 
-    const { data, error } = await supabase
-        .from('presencas')
-        .update({
-            confirmado_qrcode: true,
-        })
-        .eq('id', existing.id)
-        .select()
-        .maybeSingle();
-
-    if (error) throw error;
-    return { message: "Embarque confirmado via QR Code", data };
+    const data = await prisma.presenca.update({
+        where: { id: presencaExistente.id },
+        data: { confirmadoQrcode: true }
+    })
+    return { message: "Embarque confirmado via QR Code", data }
 }
 
 export async function confirmarPresencaVoltaQrCode(alunoId) {
 
-    const hoje = new Date().toISOString().split('T')[0];
-    const agora = new Date();
+    const hoje = new Date()
+    const agora = new Date()
 
-    const horaInicioVolta = "21:00";
-    const horaFimVolta = "23:00";
+    const horaInicioVolta = process.env.QR_CODE_VOLTA_INICIO || "21:00"
+    const horaFimVolta = process.env.QR_CODE_VOLTA_FIM || "23:00"
 
-    const [hInicio, mInicio] = horaInicioVolta.split(':').map(Number);
-    const [hFim, mFim] = horaFimVolta.split(':').map(Number);
+    const [hInicio, mInicio] = horaInicioVolta.split(':').map(Number)
+    const [hFim, mFim] = horaFimVolta.split(':').map(Number)
 
-    const inicioVolta = new Date();
-    inicioVolta.setHours(hInicio, mInicio, 0, 0);
-    const fimVolta = new Date();
-    fimVolta.setHours(hFim, mFim, 0, 0);
+    const inicioVolta = new Date()
+    inicioVolta.setHours(hInicio, mInicio, 0, 0)
+    const fimVolta = new Date()
+    fimVolta.setHours(hFim, mFim, 0, 0)
 
-    if(agora < inicioVolta) throw new Error(`A confirmação da volta só pode ser feita após as ${horaInicioVolta}.`);
-    if(agora > fimVolta) throw new Error(`A confirmação da volta só pode ser feita até as ${horaFimVolta}.`);
+    if(agora < inicioVolta) throw new Error(`A confirmação da volta só pode ser feita após as ${horaInicioVolta}.`)
+    if(agora > fimVolta) throw new Error(`A confirmação da volta só pode ser feita até as ${horaFimVolta}.`)
 
-    const { data: aluno, error: alunoError } = await supabase
-        .from('alunos')
-        .select('status_cadastro, usuarios(tipo, status)')
-        .eq('usuario_id', alunoId)
-        .maybeSingle();
+    const aluno = await prisma.aluno.findUnique({
+        where: { usuarioId: alunoId },
+        include: { ...INCLUDE_ALUNO_STATUS }
+    })
 
-    if(alunoError || !aluno) throw new Error("Aluno não encontrado");
-    if(aluno.usuarios.status !== "ativo") throw new Error("Usuário não está ativo no sistema");
-    if(aluno.status_cadastro !== "aprovado") throw new Error("Aluno não está aprovado no sistema");
-    if(aluno.usuarios.tipo !== "aluno") throw new Error("Usuário não é um aluno");
+    if(!aluno) throw new Error("Aluno não encontrado")
+    if(aluno.usuario.status !== "ativo") throw new Error("Usuário não está ativo no sistema")
+    if(aluno.usuario.tipo !== "aluno") throw new Error("Usuário não é um aluno")
 
-    const { data: existing, error } = await supabase
-        .from('presencas')
-        .select('*')
-        .eq('aluno_id', alunoId)
-        .eq('data', hoje)
-        .maybeSingle();
+    let presencaExistente = await prisma.presenca.findFirst({
+        where: { alunoId, data: hoje }
+    })
 
-    if (error) throw error;
-
-    if(!existing) {
+    if(!presencaExistente) {
         try {
-            const { data: alunoData, error: alunoErr } = await supabase
-                .from('alunos')
-                .select('curso_id, cursos(faculdade_id)')
-                .eq('usuario_id', alunoId)
-                .maybeSingle();
+            const alunoData = await prisma.aluno.findUnique({
+                where: { usuarioId: alunoId },
+                include: {
+                    curso: {
+                        select: {
+                            faculdadeId: true
+                        }
+                    }
+                }
+            })
 
-            if (!alunoErr && alunoData?.cursos?.faculdade_id) {
-                const { data: rotaIdObj, error: rotaErr } = await supabase
-                    .from('rota_faculdades')
-                    .select('rota_id')
-                    .eq('faculdade_id', alunoData.cursos.faculdade_id)
-                    .eq('status', 'ativo')
-                    .maybeSingle();
+            if (alunoData?.curso?.faculdadeId) {
+                const rotaIdObj = await prisma.rotaFaculdade.findFirst({
+                    where: {
+                        faculdadeId: alunoData.curso.faculdadeId,
+                        status: 'ativo'
+                    }
+                })
 
-                if (!rotaErr && rotaIdObj?.rota_id) {
-                    const rotaId = rotaIdObj.rota_id;
-                    const { data: existingByRota, error: errByRota } = await supabase
-                        .from('presencas')
-                        .select('*')
-                        .eq('aluno_id', alunoId)
-                        .eq('rota_id', rotaId)
-                        .eq('data', hoje)
-                        .maybeSingle();
+                if (rotaIdObj.rotaId) {
+                    const rotaId = rotaIdObj.rotaId
+                    const existing = await prisma.presenca.findFirst({
+                        where: { alunoId, rotaId, data: hoje }
+                    })
 
-                    if (!errByRota && existingByRota) {
-                        existing = existingByRota;
+                    if (existing) {
+                        presencaExistente = existing
                     }
                 }
             }
         } catch (fallbackErr) {
-            console.warn('debug: erro ao tentar inferir rota para confirmar volta:', fallbackErr);
+            logger.warn({ err: fallbackErr }, 'Erro ao tentar inferir rota para confirmar volta')
         }
     }
 
-    if(!existing) throw new Error("Aluno não marcou presença na ida.");
+    if(!presencaExistente) throw new Error("Aluno não marcou presença na ida.")
 
-    if(!existing.confirmado_qrcode) throw new Error("Aluno não confirmou embarque na ida (via QR Code).");
+    if(!presencaExistente.confirmadoQrcode) throw new Error("Aluno não confirmou embarque na ida (via QR Code).")
 
-    if(existing.confirmado_volta) throw new Error("Aluno já confirmou volta via QR Code");
+    if(presencaExistente.confirmadoVolta) throw new Error("Aluno já confirmou volta via QR Code")
 
-    const { data, error: updateError } = await supabase
-        .from('presencas')
-        .update({
-            confirmado_volta: true,
-        })
-        .eq('id', existing.id)
-        .select()
-        .maybeSingle();
+    const presenca = await prisma.presenca.update({
+        where: { id: presencaExistente.id },
+        data: { confirmadoVolta: true }
+    })
 
-    if (updateError) throw updateError;
-    return { message: "Embarque de volta confirmado via QR Code", data };
+    return { message: "Embarque de volta confirmado via QR Code", presenca }
     
 }

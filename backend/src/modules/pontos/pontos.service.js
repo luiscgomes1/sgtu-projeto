@@ -1,84 +1,58 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from "../../config/prisma.js";
+import { paginate, paginatedResponse } from '../../utils/pagination.js';
 
 export async function createPonto(payload) {
-    const { data: ponto, error } = await supabase
-        .from("pontos")
-        .insert([{
-            nome: payload.nome,
-            endereco: payload.endereco
-        }])
-        .select()
-        .single();
-
-    if (error) throw error;
-
-    const { data: rotas, error: rotaError } = await supabase
-        .from("rotas")
-        .select("id")
-
-    if (rotaError) throw rotaError;
-
-    const vinculos = rotas.map(rota => ({
-        rota_id: rota.id,
-        ponto_id: ponto.id,
-        ordem: 999, // Ordem inicial alta para aparecer no final
-        status: "ativo"
-    }));
-
-    const { error: vinculoError } = await supabase
-        .from("rota_pontos")
-        .insert(vinculos);
-
-    if (vinculoError) throw vinculoError;
+    const ponto = await prisma.ponto.create({
+      data: { nome: payload.nome, endereco: payload.endereco },
+    });
 
     return ponto;
 }
 
-export async function listPontos( { incluirInativos = false } = {}) {
-    let query = supabase
-        .from("pontos")
-        .select("*")
-        .order("created_at", { ascending: false });
+export async function listPontos({ incluirInativos = false } = {}) {
+    const where = {};
+    if (!incluirInativos) where.status = "ativo";
 
-    if (!incluirInativos) query = query.eq("status", "ativo");
-
-    const { data, error } = await query;
-
-    if (error) throw error;
+    const data = await prisma.ponto.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
     return data;
 }
 
 export async function getPontoById(id) {
-    const { data, error } = await supabase
-        .from("pontos")
-        .select("*")
-        .eq("id", id)
-        .maybeSingle();
-
-    if (error) throw error;
+    const data = await prisma.ponto.findUnique({
+      where: { id },
+    });
     return data;
 }
 
+export async function listPontosPaginated({ page = 1, limit = 20, search = '', status = '' }) {
+    const { skip, take } = paginate({ page, limit });
+    const where = {};
+    if (status) where.status = status;
+    if (search) where.nome = { contains: search, mode: 'insensitive' };
+
+    const [data, total] = await Promise.all([
+        prisma.ponto.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.ponto.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, { page, limit });
+}
+
 export async function updatePonto(id, payload) {
-    const { data, error } = await supabase
-        .from("pontos")
-        .update(payload)
-        .eq("id", id)
-        .select()
-        .single();
-    
-    if (error) throw error;
+    const data = await prisma.ponto.update({
+      where: { id },
+      data: payload,
+    });
     return data;
 }
 
 export async function setPontoStatus(id, status) {
-    const { data, error } = await supabase
-        .from("pontos")
-        .update({ status })
-        .eq("id", id)
-        .select()
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.ponto.update({
+      where: { id },
+      data: { status },
+    });
     return data;
 }

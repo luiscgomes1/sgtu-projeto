@@ -1,16 +1,11 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: 'uuidv4' }).required().messages({
-    'string.guid': 'O ID fornecido não é um UUID válido',
-    'any.required': 'O ID é obrigatório',
+export const rotaIdParamsSchema = z.object({
+    rotaId: uuidParam,
 });
 
-export const rotaIdParamsSchema = Joi.object({
-    rotaId: uuidRegex.label('ID da Rota'),
+export const rotaFaculdadeBodySchema = z.object({
+    rotaId: uuidParam,
+    faculdadeId: uuidParam,
 });
-
-export const rotaFaculdadeBodySchema = Joi.object({
-    rotaId: uuidRegex.label('ID da Rota'),
-    faculdadeId: uuidRegex.label('ID da Faculdade'),
-});
-

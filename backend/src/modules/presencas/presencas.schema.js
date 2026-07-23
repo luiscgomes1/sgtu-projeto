@@ -1,39 +1,28 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: 'uuidv4' }).required().messages({
-    'string.guid': 'O ID fornecido não é um UUID válido',
-    'any.required': 'O ID é obrigatório',
+export const presencaManualSchema = z.object({
+    alunoId: uuidParam,
+    rotaId: uuidParam,
 });
 
-export const presencaManualSchema = Joi.object({
-    alunoId: uuidRegex.label('ID do Aluno'),
-    rotaId: uuidRegex.label('ID da Rota'),
+export const marcarPresencaSchema = z.object({
+    token: z.string().min(1, 'O token é obrigatório'),
+    alunoId: uuidParam.optional(),
 });
 
-export const marcarPresencaSchema = Joi.object({
-    token: Joi.string().required().messages({
-        'any.required': 'O token é obrigatório',
-        'string.empty': 'O token não pode estar vazio',
-    }),
-    alunoId: uuidRegex.label('ID do Aluno').optional(),
+export const rotaIdParamsSchema = z.object({
+    rotaId: uuidParam,
 });
 
-export const rotaIdParamsSchema = Joi.object({
-    rotaId: uuidRegex.label('ID da Rota'),
+export const alunoIdParamsSchema = z.object({
+    alunoId: uuidParam,
 });
 
-export const alunoIdParamsSchema = Joi.object({
-    alunoId: uuidRegex.label('ID do Aluno'),
+export const presencaIdParamsSchema = z.object({
+    presencaId: uuidParam,
 });
 
-export const presencaIdParamsSchema = Joi.object({
-    presencaId: uuidRegex.label('ID da Presença'),
-});
-
-export const validarTokenSchema = Joi.object({
-    token: Joi.string().guid({ version: 'uuidv4' }).required().messages({
-        'string.guid': 'O token fornecido não é um UUID válido',
-        'any.required': 'O token é obrigatório',
-        'string.empty': 'O token não pode estar vazio',
-    }),
+export const validarTokenSchema = z.object({
+    token: uuidParam,
 });

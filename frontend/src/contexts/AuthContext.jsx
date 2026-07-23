@@ -1,63 +1,66 @@
-import { createContext, useState, useEffect } from "react";
-import Cookies from "js-cookie";
-import PropTypes from "prop-types";
-import api from "../services/api";
+import { createContext, useState, useEffect, useCallback } from "react"
+import Cookies from "js-cookie"
+import { apiService, setTokens, clearTokens, setOnLogout } from "../services/api"
 
-const AuthContext = createContext();
+export const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-    const [user, setUser] = useState(null);
-    const [token, setToken] = useState(null);
-    const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-    useEffect(() => {
-        const savedUser = Cookies.get("user");
+  useEffect(() => {
+    const savedUser = Cookies.get("user")
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser))
+      } catch {
+        Cookies.remove("user")
+      }
+    }
+    setLoading(false)
+  }, [])
 
-        if (savedUser) {
-            try {
-                setUser(JSON.parse(savedUser));                
-            } catch {
-                Cookies.remove("user");
-            }
-        }
-        setLoading(false);
-    }, []);
+  useEffect(() => {
+    setOnLogout(() => {
+      setUser(null)
+      Cookies.remove("user")
+    })
+  }, [])
 
-    const login = (userData, authToken) => {
-        Cookies.set("user", JSON.stringify(userData), { expires: 1 });
-        setUser(userData);
-        setToken(authToken);
-    };
+  const login = useCallback((userData, accessToken, refreshToken) => {
+    Cookies.set("user", JSON.stringify(userData), { expires: 1 })
+    setTokens(accessToken, refreshToken)
+    setUser(userData)
+  }, [])
 
-    const logout = () => {
-        Cookies.remove("user");
-        setUser(null);
-        setToken(null);
-    };
+  const logout = useCallback(() => {
+    apiService.logout().catch(() => {})
+    clearTokens()
+    Cookies.remove("user")
+    setUser(null)
+  }, [])
 
-    const refreshUser = async () => {
-        if (!token) return;
-        try {
-            const { data: refreshedUser } = await api.get("/alunos/me", {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            Cookies.set("user", JSON.stringify(refreshedUser), { expires: 1 });
-            setUser(refreshedUser);
-        } catch (error) {
-            console.error("Erro ao atualizar usuário:", error);
-            logout();
-        }
-    };
+  const refreshUser = useCallback(async () => {
+    if (!user) return
+    try {
+      const refreshed = await apiService.getMe()
+      const u = {
+        id: refreshed.id,
+        nome: refreshed.nome,
+        email: refreshed.email,
+        tipo: refreshed.tipo,
+        status_cadastro: refreshed.statusCadastro,
+      }
+      Cookies.set("user", JSON.stringify(u), { expires: 1 })
+      setUser(u)
+    } catch {
+      logout()
+    }
+  }, [user, logout])
 
-    return (
-        <AuthContext.Provider value={{ user, token, loading, login, logout, refreshUser }}>
-            {children}
-        </AuthContext.Provider>
-    );
+  return (
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+      {children}
+    </AuthContext.Provider>
+  )
 }
-
-AuthProvider.propTypes = {
-    children: PropTypes.node.isRequired,
-};
-
-export { AuthContext };

@@ -1,102 +1,67 @@
-import { supabase } from "../../config/supabase.js";
+import { prisma } from "../../config/prisma.js";
+import { truncDate } from "../../utils/functions.js";
+import { INCLUDE_MOTORISTA_BASICO } from "../../shared/includes.js";
 
 export async function atribuirMotorista(rotaId, motoristaId, inicio = null, fim = null) {
-    // Normalize dates to YYYY-MM-DD (DB column is date)
-    const inicioIso = inicio ? new Date(inicio).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-    const fimIso = fim ? new Date(fim).toISOString().split('T')[0] : null;
+    const inicioIso = inicio ? truncDate(inicio) : truncDate();
+    const fimIso = fim ? truncDate(fim) : null;
 
-    // Fetch existing links for this motorista+rota and check overlaps in JS
-    const { data: existingList, error: fetchErr } = await supabase
-        .from('rota_motoristas')
-        .select('*')
-        .eq('rota_id', rotaId)
-        .eq('motorista_id', motoristaId);
-
-    if (fetchErr) throw fetchErr;
+    const existingList = await prisma.rotaMotorista.findMany({
+        where: { rotaId, motoristaId },
+    });
 
     const overlaps = (existingList || []).filter((ex) => {
-        const exInicio = ex.inicio ? ex.inicio.toString().split('T')[0] : null;
-        const exFim = ex.fim ? ex.fim.toString().split('T')[0] : null;
+        const exInicio = ex.inicio ? truncDate(ex.inicio) : null;
+        const exFim = ex.fim ? truncDate(ex.fim) : null;
         const aStart = exInicio;
         const aEnd = exFim || '9999-12-31';
         const bStart = inicioIso;
         const bEnd = fimIso || '9999-12-31';
-        // overlap if not (aEnd < bStart || bEnd < aStart)
         return !(aEnd < bStart || bEnd < aStart);
     });
 
     if (overlaps.length) {
         const existing = overlaps[0];
         if (existing.status !== 'ativo') {
-            // Reactivate / update existing
-            await supabase
-                .from('rota_motoristas')
-                .update({ status: 'ativo', inicio: inicioIso, fim: fimIso })
-                .eq('id', existing.id);
+            await prisma.rotaMotorista.update({
+                where: { id: existing.id },
+                data: { status: 'ativo', inicio: new Date(inicioIso), fim: fimIso ? new Date(fimIso) : null },
+            });
             return { message: 'Vínculo existente reativado com sucesso.' };
         }
-
-        // If already active and overlaps, skip creating duplicate
         return { message: 'Existe um vínculo ativo que se sobrepõe ao período informado.' };
     }
 
-    const { error } = await supabase
-        .from('rota_motoristas')
-        .insert([{ rota_id: rotaId, motorista_id: motoristaId, inicio: inicioIso, fim: fimIso }]);
+    await prisma.rotaMotorista.create({
+        data: {
+            rotaId,
+            motoristaId,
+            inicio: new Date(inicioIso),
+            fim: fimIso ? new Date(fimIso) : null,
+        },
+    });
 
-    if (error) throw error;
     return { message: 'Motorista atribuído à rota com sucesso.' };
 }
 
 export async function desativarMotorista(rotaId, motoristaId) {
-    const today = new Date().toISOString().split('T')[0];
-    const { error } = await supabase
-        .from('rota_motoristas')
-        .update({ status: 'inativo', fim: today })
-        .eq('rota_id', rotaId)
-        .eq('motorista_id', motoristaId)
-        .eq('status', 'ativo');
+    const today = new Date();
+    await prisma.rotaMotorista.updateMany({
+        where: { rotaId, motoristaId, status: 'ativo' },
+        data: { status: 'inativo', fim: today },
+    });
 
-    if (error) throw error;
     return { message: 'Motorista desativado da rota com sucesso.' };
 }
 
-export async function desativarVinculosPorPeriodo(ano, mes) {
-    const inicioPeriodo = new Date(ano, mes - 1, 1).toISOString().split('T')[0];
-    const fimPeriodo = new Date(ano, mes, 0).toISOString().split('T')[0];
-
-    const { data: candidates, error: fetchErr } = await supabase
-        .from('rota_motoristas')
-        .select('id, inicio, fim, status');
-    if (fetchErr) throw fetchErr;
-
-    const toUpdateIds = (candidates || []).filter((r) => {
-        const aStart = r.inicio ? r.inicio.toString().split('T')[0] : null;
-        const aEnd = r.fim ? r.fim.toString().split('T')[0] : '9999-12-31';
-        const bStart = inicioPeriodo;
-        const bEnd = fimPeriodo;
-        return !(aEnd < bStart || bEnd < aStart);
-    }).map(r => r.id);
-
-    if (toUpdateIds.length === 0) return { message: `Nenhum vínculo encontrado para o período ${mes}/${ano}.` };
-
-    const { error } = await supabase
-        .from('rota_motoristas')
-        .update({ status: 'inativo' })
-        .in('id', toUpdateIds);
-
-    if (error) throw error;
-    return { message: `Vínculos de ${mes}/${ano} desativados com sucesso.`, count: toUpdateIds.length };
-}
-
 export async function listarMotoristasDaRota(rotaId) {
-    const { data, error } = await supabase
-        .from('rota_motoristas')
-        .select('id, inicio, fim, status, motoristas(id, nome, telefone, status)')
-        .eq("rota_id", rotaId)
-        .eq('status', 'ativo')
-        .order('inicio', { ascending: true });
-    if (error) throw error;
-    
+    const data = await prisma.rotaMotorista.findMany({
+        where: { rotaId, status: 'ativo' },
+        include: {
+            motorista: INCLUDE_MOTORISTA_BASICO.motorista,
+        },
+        orderBy: { inicio: 'asc' },
+    });
+
     return data;
 }

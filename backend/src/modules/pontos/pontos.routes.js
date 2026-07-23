@@ -6,23 +6,6 @@ import * as pontosSchema from "./pontos.schema.js";
 
 const router = Router({ mergeParams: true });
 
-/**
- * @swagger
- * tags:
- *   - name: Pontos
- *     description: Pontos de embarque e gerenciamento
- */
-
-/**
- * @swagger
- * /pontos:
- *   post:
- *     summary: Cria um ponto (admin)
- *     tags:
- *       - Pontos
- *     security:
- *       - bearerAuth: []
- */
 router.post(
   "/",
   requireAuth,
@@ -31,15 +14,13 @@ router.post(
   pontosController.createPontoController
 );
 
-/**
- * @swagger
- * /pontos:
- *   get:
- *     summary: Lista pontos
- *     tags:
- *       - Pontos
- */
 router.get("/", pontosController.listPontosController);
+
+router.get(
+    "/paginated",
+    validate(pontosSchema.pontoListQuerySchema, 'query'),
+    pontosController.listPontosPaginatedController
+);
 
 router.get(
   "/detalhe/:id",
@@ -52,7 +33,7 @@ router.put(
   "/:id",
   requireAuth,
   requireRole("admin"),
-  validate(pontosSchema.pontoUpdateSchema, "params"),
+  validate(pontosSchema.pontoIdParamsSchema, "params"),
   validate(pontosSchema.pontoUpdateSchema),
   pontosController.updatePontoController
 );

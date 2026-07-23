@@ -1,104 +1,110 @@
-import { supabase } from '../../config/supabase.js';
+import { prisma } from '../../config/prisma.js'
+import { paginate, paginatedResponse } from '../../utils/pagination.js'
+import { INCLUDE_FACULDADE } from "../../shared/includes.js"
 
 export async function createCurso(payload) {
-    const existing = await supabase
-        .from('cursos')
-        .select('*')
-        .eq('nome', payload.nome)
-        .eq('faculdade_id', payload.faculdade_id)
-        .maybeSingle();
+    const { faculdade_id, ...rest } = payload;
+    const data = { ...rest, faculdadeId: faculdade_id };
 
-    if(existing.data) throw new Error('Curso já existe para esta faculdade.');
+    const existing = await prisma.curso.findFirst({
+        where: {
+            nome: data.nome,
+            faculdadeId: data.faculdadeId
+        }
+    })
+
+    if(existing) throw new Error('Curso já existe para esta faculdade.')
     
-    const { data, error } = await supabase
-        .from('cursos')
-        .insert([{
-            nome: payload.nome,
-            faculdade_id: payload.faculdade_id
-        }])
-        .select()
-        .single();
+    const curso = await prisma.curso.create({
+        data
+    })
 
-    if (error) throw error;
-    return data;
+    return curso
 }
 
 export async function listCursos({ incluirInativos = false } = {}) {
-    let query = supabase
-        .from('cursos')
-        .select('*, faculdades(nome)')
-        .order('faculdade_id', { ascending: true })
-        .order('nome', { ascending: true });
+    const cursos = await prisma.curso.findMany({
+        include: INCLUDE_FACULDADE,
+        orderBy: [
+            { faculdadeId: 'asc' },
+            { nome: 'asc' }
+        ],
+        where: incluirInativos ? {} : { status: 'ativo' }
+    })
 
-    if (!incluirInativos) {
-        query = query.eq('status', 'ativo');
-    }
+    return cursos
+}
 
-    const { data, error } = await query;
+export async function listCursosPaginated({ page = 1, limit = 20, search = '', status = '', faculdade_id = '' }) {
+    const { skip, take } = paginate({ page, limit });
+    const where = {};
+    if (status) where.status = status;
+    if (faculdade_id) where.faculdadeId = faculdade_id;
+    if (search) where.nome = { contains: search, mode: 'insensitive' };
 
-    if (error) throw error;
-    return data;
+    const [data, total] = await Promise.all([
+        prisma.curso.findMany({
+            where,
+            include: INCLUDE_FACULDADE,
+            skip,
+            take,
+            orderBy: [{ faculdadeId: 'asc' }, { nome: 'asc' }],
+        }),
+        prisma.curso.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, { page, limit });
 }
 
 export async function updateCurso(id, payload) {
     // Verifica duplicidade: existe outro curso com mesmo nome e faculdade_id?
-    const existing = await supabase
-        .from('cursos')
-        .select('id')
-        .eq('nome', payload.nome)
-        .eq('faculdade_id', payload.faculdade_id)
-        .neq('id', id)
-        .maybeSingle();
+    const existing = await prisma.curso.findFirst({
+        where: {
+            nome: payload.nome,
+            faculdadeId: payload.faculdadeId,
+            id: { not: id }
+        }
+    })
 
-    if (existing.data) throw new Error('Já existe um curso com esse nome para esta faculdade.');
+    if (existing) throw new Error('Já existe um curso com esse nome para esta faculdade.')
 
-    const { data, error } = await supabase
-        .from('cursos')
-        .update(payload)
-        .eq('id', id)
-        .select('*, faculdades(nome)')
-        .single();
-    
-    if (error) throw error;
-    return data;
+    const curso = await prisma.curso.update({
+        where: { id },
+        data: payload
+    });
+
+    return curso
 }
 
 export async function setCursoStatus(id, status) {
-    const { data, error } = await supabase
-        .from('cursos')
-        .update({ status })
-        .eq('id', id)
-        .select('*, faculdades(nome)')
-        .single();
-    
-    if (error) throw error;
-    return data;
+    const curso = await prisma.curso.update({
+        where: { id },
+        data: { status }
+    });
+
+    return curso
 }
 
 export async function getCursoById(id) {
-    const { data, error } = await supabase
-        .from('cursos')
-        .select('*, faculdades(nome)')
-        .eq('id', id)
-        .single();
+    const curso = await prisma.curso.findUnique({
+        where: { id },
+        include: INCLUDE_FACULDADE
+    })
 
-    if (error) throw error;
-    return data;
+    return curso
 }
 
 export async function listCursosByFaculdade(faculdadeId, { incluirInativos = false } = {}) {
-    let query = supabase
-        .from('cursos')
-        .select('*, faculdades(nome)')
-        .eq('faculdade_id', faculdadeId)
-        .order('nome', { ascending: true });
-    
-    if (!incluirInativos) {
-        query = query.eq('status', 'ativo');
-    }
+    const cursosPorFaculdade = await prisma.curso.findMany({
+        where: {
+            faculdadeId: faculdadeId,
+            ...(incluirInativos ? {} : { status: 'ativo' })
+        },
+        include: INCLUDE_FACULDADE,
+        orderBy: {
+            nome: 'asc'
+        }
+    })
 
-    const { data, error } = await query;
-
-    if (error) throw error;
-    return data;
+    return cursosPorFaculdade;
 }

@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sgtu
+      POSTGRES_PASSWORD: sgtu
+      POSTGRES_DB: sgtu
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sgtu"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "4000:4000"
+    env_file:
+      - .env
+    environment:
+      TZ: America/Sao_Paulo
+      DATABASE_URL: postgresql://sgtu:sgtu@db:5432/sgtu
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:

@@ -1,64 +1,57 @@
-import { supabase } from '../../config/supabase.js';
+import { prisma } from '../../config/prisma.js';
+import { paginate, paginatedResponse } from '../../utils/pagination.js';
 
 export async function createRota (nome) {
-    const { data, error } = await supabase
-        .from('rotas')
-        .insert({ nome })
-        .select()
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.rota.create({
+      data: { nome },
+    });
     return data;
 }
 
-
-// listar as rotas (somente ativas por padrão) com possibilidade de filtro por status
 export async function listRotas({ incluirInativas = false } = {}) {
-    let query = supabase
-        .from('rotas')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const where = {};
+    if (!incluirInativas) where.status = "ativo";
 
-    if (!incluirInativas) query = query.eq('status', 'ativo');
-
-    const { data, error } = await query;
-
-    if (error) throw error;
+    const data = await prisma.rota.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+    });
     return data;
 }
 
 export async function getRotaById(id) {
-    const { data, error } = await supabase
-        .from('rotas')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-    if (error) throw error;
+    const data = await prisma.rota.findUnique({
+      where: { id },
+    });
     return data;
 }
 
-export async function updateRota(id, updates) {
-    const { data, error } = await supabase
-        .from('rotas')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
+export async function listRotasPaginated({ page = 1, limit = 20, search = '', status = '' }) {
+    const { skip, take } = paginate({ page, limit });
+    const where = {};
+    if (status) where.status = status;
+    if (search) where.nome = { contains: search, mode: 'insensitive' };
 
-    if (error) throw error;
+    const [data, total] = await Promise.all([
+        prisma.rota.findMany({ where, skip, take, orderBy: { createdAt: 'desc' } }),
+        prisma.rota.count({ where }),
+    ]);
+
+    return paginatedResponse(data, total, { page, limit });
+}
+
+export async function updateRota(id, updates) {
+    const data = await prisma.rota.update({
+      where: { id },
+      data: updates,
+    });
     return data;
 }
 
 export async function setRotaStatus(id, status) {
-    const { data, error } = await supabase
-        .from('rotas')
-        .update({ status })
-        .eq('id', id)
-        .select()
-        .single();
-    
-    if (error) throw error;
+    const data = await prisma.rota.update({
+      where: { id },
+      data: { status },
+    });
     return data;
 }
-

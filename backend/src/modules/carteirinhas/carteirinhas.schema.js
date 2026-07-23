@@ -1,17 +1,10 @@
-import Joi from 'joi';
+import { z } from 'zod';
+import { uuidParam } from '../../shared/schemas.js';
 
-const uuidRegex = Joi.string().guid({ version: 'uuidv4' }).required().messages({
-    'string.guid': 'O ID fornecido não é um UUID válido',
-    'any.required': 'O ID é obrigatório',
+export const alunoIdParamsSchema = z.object({
+    alunoId: uuidParam,
 });
 
-export const alunoIdParamsSchema = Joi.object({
-    alunoId: uuidRegex.label('ID do Aluno'),
-});
-
-export const validarQrCodeSchema = Joi.object({
-    token: Joi.string().guid({ version: 'uuidv4' }).required().messages({
-        'string.guid': 'O token fornecido não é um UUID válido',
-        'any.required': 'O token é obrigatório',
-    }),
+export const validarQrCodeSchema = z.object({
+    token: uuidParam,
 });

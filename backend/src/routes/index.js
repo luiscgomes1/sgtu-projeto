@@ -19,25 +19,9 @@ import signupRoutes from '../modules/signup/signup.routes.js';
 import uploadRoutes from '../upload/upload.routes.js';
 import usuarioRoutes from '../modules/usuarios/usuario.routes.js';
 import viagensRoutes from '../modules/viagens/viagens.routes.js';
-import { authLimiter } from '../middleware/rateLimit.js';
+import { authLimiter, uploadLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
-
-/**
- * @openapi
- * /status:
- *   get:
- *     summary: Verifica o status do servidor
- *     description: Endpoint simples para testar se o backend está rodando corretamente.
- *     tags:
- *       - Status
- *     responses:
- *       200:
- *         description: Retorna uma mensagem de status OK.
- */
-router.get('/status', (req, res) => {
-  res.status(200).json({ message: '✅ Servidor rodando com sucesso!' });
-});
 
 router.use('/alunos', alunosRoutes);
 router.use('/aluno-pontos', alunoPontosRoutes);
@@ -56,7 +40,7 @@ router.use('/rota-motoristas', rotaMotoristasRoutes);
 router.use('/rota-pontos', rotaPontosRoutes);
 router.use('/rotas', rotasRoutes);
 router.use('/signup', authLimiter, signupRoutes);
-router.use('/upload', uploadRoutes);
+router.use('/upload', uploadLimiter, uploadRoutes);
 router.use('/usuario', usuarioRoutes);
 router.use('/viagens', viagensRoutes);
 
