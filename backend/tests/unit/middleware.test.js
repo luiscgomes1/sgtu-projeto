@@ -63,7 +63,7 @@ describe('Auth middleware (unit)', () => {
       );
 
       const { requireAuth } = await import('../../src/middleware/auth.js');
-      const req = { headers: {}, cookies: { jwt: token } };
+      const req = { headers: { authorization: `Bearer ${token}` } };
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
       const next = vi.fn();
 
@@ -91,7 +91,7 @@ describe('Auth middleware (unit)', () => {
       );
 
       const { requireAuth } = await import('../../src/middleware/auth.js');
-      const req = { headers: {}, cookies: { jwt: token } };
+      const req = { headers: { authorization: `Bearer ${token}` } };
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
       const next = vi.fn();
 
@@ -114,7 +114,7 @@ describe('Auth middleware (unit)', () => {
       );
 
       const { requireAuth } = await import('../../src/middleware/auth.js');
-      const req = { headers: {}, cookies: { jwt: token } };
+      const req = { headers: { authorization: `Bearer ${token}` } };
       const res = { status: vi.fn().mockReturnThis(), json: vi.fn() };
       const next = vi.fn();
 

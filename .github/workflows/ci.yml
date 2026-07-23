@@ -41,6 +41,9 @@ jobs:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
           JWT_SECRET: placeholder-jwt-secret-for-ci
           API_KEY: placeholder-api-key-for-ci
+          SUPABASE_URL: https://placeholder.supabase.co
+          SUPABASE_SERVICE_ROLE: placeholder-service-role
+          STORAGE_BUCKET: placeholder-bucket
 
   lint-frontend:
     runs-on: ubuntu-latest
