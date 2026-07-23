@@ -35,7 +35,7 @@ jobs:
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
       - name: Run tests
-        run: npm test
+        run: npx vitest run
         working-directory: backend
 
   lint-frontend:
