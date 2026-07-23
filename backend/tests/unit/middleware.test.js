@@ -415,7 +415,7 @@ describe('Error handler (unit)', () => {
 
     expect(res.status).toHaveBeenCalledWith(500);
     expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ error: 'Erro interno' })
+      expect.objectContaining({ error: 'Erro interno do servidor' })
     );
   });
 });

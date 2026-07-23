@@ -37,6 +37,10 @@ jobs:
       - name: Run tests
         run: npx vitest run
         working-directory: backend
+        env:
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+          JWT_SECRET: placeholder-jwt-secret-for-ci
+          API_KEY: placeholder-api-key-for-ci
 
   lint-frontend:
     runs-on: ubuntu-latest
