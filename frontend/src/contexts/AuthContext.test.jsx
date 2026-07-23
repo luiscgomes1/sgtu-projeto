@@ -7,7 +7,6 @@ const mockCookies = vi.hoisted(() => ({ set: vi.fn(), get: vi.fn(), remove: vi.f
 const mockSetTokens = vi.hoisted(() => vi.fn())
 const mockClearTokens = vi.hoisted(() => vi.fn())
 const mockSetOnLogout = vi.hoisted(() => vi.fn())
-const mockLogout = vi.hoisted(() => vi.fn())
 
 vi.mock('js-cookie', () => ({ default: mockCookies }))
 

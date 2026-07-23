@@ -4,3 +4,4 @@ dist
 sql.txt
 /src/generated/prisma
 prisma/dados-*.json
+tests/.env.test

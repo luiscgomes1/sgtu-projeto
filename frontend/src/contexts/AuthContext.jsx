@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components */
+
 import { createContext, useState, useEffect, useCallback } from "react"
 import Cookies from "js-cookie"
 import { apiService, setTokens, clearTokens, setOnLogout } from "../services/api"
