@@ -6,9 +6,9 @@ import { validate } from '../../middleware/validate.js';
 import { sanitizeData } from '../../middleware/sanitize.js';
 const router = Router();
 
-router.post('/vincular', requireAuth, sanitizeData, validate(AlunoPontoSchema.alunoPontoBodySchema), AlunoPontoController.vincularAlunoPontoController);
-router.post('/desvincular', requireAuth, sanitizeData, validate(AlunoPontoSchema.alunoPontoBodySchema), AlunoPontoController.desvincularAlunoPontoController);
-router.get('/aluno/:alunoId', requireAuth, validate(AlunoPontoSchema.alunoIdParamSchema, 'params'), AlunoPontoController.listarPontoDoAlunoController);
-router.get('/ponto/:pontoId', requireAuth, validate(AlunoPontoSchema.pontoIdParamSchema, 'params'), AlunoPontoController.listarAlunosDoPontoController);
+router.post('/vincular', requireAuth, requireRole('admin'), sanitizeData, validate(AlunoPontoSchema.alunoPontoBodySchema), AlunoPontoController.vincularAlunoPontoController);
+router.post('/desvincular', requireAuth, requireRole('admin'), sanitizeData, validate(AlunoPontoSchema.alunoPontoBodySchema), AlunoPontoController.desvincularAlunoPontoController);
+router.get('/aluno/:alunoId', requireAuth, requireRole('admin'), validate(AlunoPontoSchema.alunoIdParamSchema, 'params'), AlunoPontoController.listarPontoDoAlunoController);
+router.get('/ponto/:pontoId', requireAuth, requireRole('admin'), validate(AlunoPontoSchema.pontoIdParamSchema, 'params'), AlunoPontoController.listarAlunosDoPontoController);
 
 export default router;

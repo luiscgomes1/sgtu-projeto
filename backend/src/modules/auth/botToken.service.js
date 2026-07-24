@@ -20,8 +20,6 @@ export async function generateBotTokenForTelegramId(telegramId, options = {}) {
 
   const payload = {
     id: data.usuarioId,
-    nome: data.usuario.nome,
-    email: data.usuario.email,
     tipo: data.usuario.tipo,
     scope: options.scope || ['presenca', 'carteirinha'],
     aud: 'bot',
@@ -32,24 +30,4 @@ export async function generateBotTokenForTelegramId(telegramId, options = {}) {
   return { token, user: { id: data.usuarioId, nome: data.usuario.nome, email: data.usuario.email } };
 }
 
-export async function generateBotTokenForUserId(userId, options = {}) {
-  if (!JWT_SECRET) throw new Error('JWT_SECRET não está definido');
 
-  const data = await prisma.usuario.findUnique({
-    where: { id: userId },
-  });
-
-  if (!data) return null;
-
-  const payload = {
-    id: data.id,
-    nome: data.nome,
-    email: data.email,
-    tipo: data.tipo,
-    scope: options.scope || ['presenca', 'carteirinha'],
-    aud: 'bot',
-  };
-
-  const token = jwt.sign(payload, JWT_SECRET, { expiresIn: BOT_JWT_EXPIRES_IN });
-  return { token, user: { id: data.id, nome: data.nome, email: data.email } };
-}

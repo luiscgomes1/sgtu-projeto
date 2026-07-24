@@ -12,14 +12,44 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     const savedUser = Cookies.get("user")
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser))
-      } catch {
-        Cookies.remove("user")
-      }
+    if (!savedUser) {
+      setLoading(false)
+      return
     }
-    setLoading(false)
+
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const parsed = JSON.parse(savedUser)
+        setUser({ id: parsed.id, tipo: parsed.tipo })
+        const tokens = await apiService.refresh()
+        if (!cancelled) {
+          setTokens(tokens.accessToken)
+          const refreshed = await apiService.getMe()
+          if (!cancelled) {
+            const u = {
+              id: refreshed.id,
+              nome: refreshed.nome,
+              email: refreshed.email,
+              tipo: refreshed.tipo,
+              status_cadastro: refreshed.statusCadastro,
+            }
+            Cookies.set("user", JSON.stringify({ id: u.id, tipo: u.tipo }), { expires: 1 })
+            setUser(u)
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          Cookies.remove("user")
+          setUser(null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -29,9 +59,9 @@ export function AuthProvider({ children }) {
     })
   }, [])
 
-  const login = useCallback((userData, accessToken, refreshToken) => {
-    Cookies.set("user", JSON.stringify(userData), { expires: 1 })
-    setTokens(accessToken, refreshToken)
+  const login = useCallback((userData, accessToken) => {
+    Cookies.set("user", JSON.stringify({ id: userData.id, tipo: userData.tipo }), { expires: 1 })
+    setTokens(accessToken)
     setUser(userData)
   }, [])
 
@@ -53,7 +83,7 @@ export function AuthProvider({ children }) {
         tipo: refreshed.tipo,
         status_cadastro: refreshed.statusCadastro,
       }
-      Cookies.set("user", JSON.stringify(u), { expires: 1 })
+      Cookies.set("user", JSON.stringify({ id: u.id, tipo: u.tipo }), { expires: 1 })
       setUser(u)
     } catch {
       logout()

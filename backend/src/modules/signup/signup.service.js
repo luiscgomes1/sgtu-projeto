@@ -43,7 +43,8 @@ export async function createSignupRequest(payload) {
         },
       },
     },
-    include: {
+    select: {
+      id: true, nome: true, email: true, tipo: true, status: true, createdAt: true,
       aluno: true,
     },
   });
@@ -52,8 +53,15 @@ export async function createSignupRequest(payload) {
 }
 
 export async function updateSignupRequest(requestId, payload) {
-  const { comprovante_matricula_url, comprovante_residencia_url, foto_url, status } =
+  const { comprovante_matricula_url, comprovante_residencia_url, foto_url } =
     payload;
+
+  const existing = await prisma.aluno.findUnique({
+    where: { usuarioId: requestId },
+    select: { statusCadastro: true },
+  });
+  if (!existing) throw new Error('Solicitação de cadastro não encontrada.');
+  if (existing.statusCadastro !== 'pendente') throw new Error('Solicitação já processada não pode ser alterada.');
 
   const aluno = await prisma.aluno.update({
     where: { usuarioId: requestId },
@@ -61,7 +69,6 @@ export async function updateSignupRequest(requestId, payload) {
       comprovanteMatriculaUrl: comprovante_matricula_url,
       comprovanteResidenciaUrl: comprovante_residencia_url,
       fotoUrl: foto_url,
-      statusCadastro: status || "pendente",
     },
     include: {
       usuario: {
@@ -73,7 +80,7 @@ export async function updateSignupRequest(requestId, payload) {
   return aluno;
 }
 
-export async function listRequests(requester) {
+export async function listRequests() {
   const hoje = truncDate();
 
   const data = await prisma.aluno.findMany({
@@ -229,8 +236,6 @@ export async function getRequestById(id) {
   });
 
   if (!aluno) throw new Error("Requisição não encontrada");
-
-  const bucket = "alunos_docs";
 
   const result = {
     ...aluno.usuario,

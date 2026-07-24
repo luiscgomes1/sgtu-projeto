@@ -36,6 +36,7 @@ router.get("/me", requireAuth, AlunoController.obterMeuPerfilController);
 router.get(
   "/:id",
   requireAuth,
+  requireRole("admin"),
   validate(AlunoSchema.alunoIdParamsSchema, 'params'),
   AlunoController.obterAlunoController
 );

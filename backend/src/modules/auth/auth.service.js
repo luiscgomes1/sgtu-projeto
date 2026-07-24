@@ -6,12 +6,15 @@ import { INCLUDE_FACULDADE } from "../../shared/includes.js";
 export async function login({ email, senha }) {
   const user = await prisma.usuario.findUnique({
     where: { email },
-    include: {
+    select: {
+      id: true, nome: true, email: true, senhaHash: true, tipo: true, status: true,
       aluno: {
-        include: {
-          curso: {
-            include: INCLUDE_FACULDADE,
-          },
+        select: {
+          usuarioId: true, cursoId: true, rg: true, cpf: true, telefone: true,
+          dataNascimento: true, endereco: true, tipoSanguineo: true,
+          comprovanteResidenciaUrl: true, comprovanteMatriculaUrl: true, fotoUrl: true,
+          telegramId: true, statusCadastro: true,
+          curso: { include: INCLUDE_FACULDADE },
         },
       },
     },

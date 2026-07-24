@@ -20,6 +20,7 @@ const AdminPontos = lazy(() => import("./pages/Admin/pontos"))
 const AdminMotoristas = lazy(() => import("./pages/Admin/motoristas"))
 const AdminEscalas = lazy(() => import("./pages/Admin/escalas"))
 const AdminRelatorios = lazy(() => import("./pages/Admin/relatorios"))
+const AdminConfiguracoes = lazy(() => import("./pages/Admin/configuracoes"))
 const AdminRequestDetail = lazy(() => import("./pages/Admin/requests"))
 const Perfil = lazy(() => import("./pages/Perfil"))
 const MotoristaVolta = lazy(() => import("./pages/MotoristaVolta"))
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="motoristas" element={<AdminMotoristas />} />
             <Route path="escalas" element={<AdminEscalas />} />
             <Route path="relatorios" element={<AdminRelatorios />} />
+            <Route path="configuracoes" element={<AdminConfiguracoes />} />
             <Route path="requests/:id" element={<AdminRequestDetail />} />
           </Route>
 

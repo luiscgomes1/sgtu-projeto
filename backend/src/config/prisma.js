@@ -6,5 +6,6 @@ if (!DATABASE_URL) {
   throw new Error('Configure DATABASE_URL no .env')
 }
 
-const adapter = new PrismaPg({ connectionString: DATABASE_URL })
+const ssl = process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : undefined;
+const adapter = new PrismaPg({ connectionString: DATABASE_URL, ssl })
 export const prisma = new PrismaClient({ adapter })

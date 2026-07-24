@@ -32,13 +32,23 @@ describe('shared schemas', () => {
     expect(result.success).toBe(false);
   });
 
-  it('cpfField aceita 11 dígitos', () => {
-    const result = cpfField.safeParse('12345678901');
+  it('cpfField aceita CPF com dígitos válidos', () => {
+    const result = cpfField.safeParse('52998224725');
     expect(result.success).toBe(true);
   });
 
   it('cpfField rejeita string curta', () => {
     const result = cpfField.safeParse('123');
+    expect(result.success).toBe(false);
+  });
+
+  it('cpfField rejeita CPF com dígitos inválidos', () => {
+    const result = cpfField.safeParse('12345678901');
+    expect(result.success).toBe(false);
+  });
+
+  it('cpfField rejeita CPF com todos dígitos iguais', () => {
+    const result = cpfField.safeParse('11111111111');
     expect(result.success).toBe(false);
   });
 

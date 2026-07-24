@@ -3,6 +3,7 @@ import { INCLUDE_ALUNO_PERFIL } from "../../shared/includes.js";
 
 export async function listarAlunos() {
   const data = await prisma.aluno.findMany({
+    where: { statusCadastro: { in: ['aprovado', 'ativo'] } },
     include: INCLUDE_ALUNO_PERFIL,
   });
   return data;
@@ -57,9 +58,9 @@ export async function listAlunosPaginated({
   return { data, total };
 }
 
-export async function obterEstatisticas({ status_cadastro = null } = {}) {
+export async function obterEstatisticas({ status_cadastro } = {}) {
   const where = {};
-  if (status_cadastro) where.statusCadastro = status_cadastro;
+  where.statusCadastro = status_cadastro ? { in: [status_cadastro] } : { in: ['aprovado', 'ativo'] };
 
   const [porCursoRows, cursos] = await Promise.all([
     prisma.aluno.groupBy({

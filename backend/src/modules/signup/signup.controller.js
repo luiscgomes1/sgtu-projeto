@@ -26,7 +26,7 @@ export async function listRequestsPaginatedController(req, res, next) {
 }
 
 export async function listRequestsController(req, res, next) {
-    const data = await signupService.listRequests(req.user);
+    const data = await signupService.listRequests();
     ok(res, data.map(a => maskAluno(a, req.user)));
 }
 

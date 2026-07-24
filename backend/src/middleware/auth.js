@@ -13,7 +13,7 @@ export async function requireAuth(req, res, next) {
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Token ausente' });
 
-    const payload = jwt.verify(token, JWT_SECRET);
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
 
     const user = await prisma.usuario.findUnique({
       where: { id: payload.id },

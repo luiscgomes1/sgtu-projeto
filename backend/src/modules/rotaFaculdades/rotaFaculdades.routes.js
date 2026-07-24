@@ -10,6 +10,7 @@ const router = Router();
 router.get(
   "/:rotaId",
   requireAuth,
+  requireRole("admin"),
   validate(RotaFaculdadesSchema.rotaIdParamsSchema, "params"),
   RotaFaculdadesController.listarFaculdadesDaRotaController
 );

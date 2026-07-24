@@ -12,6 +12,7 @@ import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { generalLimiter } from './middleware/rateLimit.js';
 import { sanitizeData } from './middleware/sanitize.js';
+import rateLimit from 'express-rate-limit';
 
 process.on('unhandledRejection', (reason) => {
   logger.error({ err: reason }, 'Rejeição não tratada');
@@ -74,11 +75,21 @@ app.use(pinoHttp({
   autoLogging: {
     ignore: (req) => req.url === '/api/health',
   },
+  serializers: {
+    req: (req) => ({
+      method: req.method,
+      url: req.url,
+    }),
+  },
 }));
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+const swaggerEnabled = process.env.SWAGGER_ENABLED === 'true' || process.env.NODE_ENV !== 'production';
+if (swaggerEnabled) {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+}
 
-app.get('/api/health', healthController);
+const healthLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false, message: { error: 'Muitas requisições' } });
+app.get('/api/health', healthLimiter, healthController);
 app.use('/api', generalLimiter, sanitizeData, routes);
 
 app.use(notFound);

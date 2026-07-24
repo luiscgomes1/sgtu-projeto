@@ -9,9 +9,9 @@ const REFRESH_TOKEN_DAYS = 7;
 
 export async function generateTokens(user) {
   const accessToken = jwt.sign(
-    { id: user.id, nome: user.nome, email: user.email, tipo: user.tipo, status: user.status },
+    { id: user.id, tipo: user.tipo, status: user.status },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRES },
+    { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_EXPIRES },
   );
 
   const rawToken = crypto.randomBytes(40).toString('hex');
@@ -34,7 +34,7 @@ export async function refreshAccessToken(rawToken) {
       revokedAt: null,
       expiresAt: { gte: new Date() },
     },
-    include: { usuario: true },
+    include: { usuario: { select: { id: true, nome: true, email: true, tipo: true, status: true } } },
   });
 
   let matched = null;
@@ -58,9 +58,9 @@ export async function refreshAccessToken(rawToken) {
   }
 
   const accessToken = jwt.sign(
-    { id: user.id, nome: user.nome, email: user.email, tipo: user.tipo, status: user.status },
+    { id: user.id, tipo: user.tipo, status: user.status },
     JWT_SECRET,
-    { expiresIn: ACCESS_TOKEN_EXPIRES },
+    { algorithm: 'HS256', expiresIn: ACCESS_TOKEN_EXPIRES },
   );
 
   const rawTokenNovo = crypto.randomBytes(40).toString('hex');

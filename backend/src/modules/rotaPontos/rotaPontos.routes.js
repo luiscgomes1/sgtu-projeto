@@ -11,6 +11,7 @@ const router = Router();
 router.get(
   "/:rotaId/pontos",
   requireAuth,
+  requireRole("admin"),
   validate(rotaPontosSchema.rotaIdParamsSchema, "params"),
   rotaPontosController.listByRotaController
 );
@@ -41,6 +42,7 @@ router.patch(
 router.get(
   "/:rotaId/pontos/isOrdered",
   requireAuth,
+  requireRole("admin"),
   validate(rotaPontosSchema.rotaIdParamsSchema, "params"),
   rotaPontosController.isOrderedController
 );

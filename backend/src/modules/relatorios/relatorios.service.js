@@ -545,14 +545,20 @@ export async function gerarRelatorioGeralExcel() {
   return buffer;
 }
 
+const MAX_RELATORIO_DIAS = 365;
+
 export async function gerarRelatorioCompleto(dataInicial, dataFinal) {
+  if (!dataInicial && !dataFinal) {
+    dataFinal = new Date().toISOString().slice(0, 10);
+    dataInicial = new Date(Date.now() - MAX_RELATORIO_DIAS * 86400000).toISOString().slice(0, 10);
+  }
   const [geral, rotas, faculdades, cursos, alunos, motoristas] = await Promise.all([
     relatorioGeral(),
     prisma.rota.findMany({ where: { status: "ativo" }, select: { id: true, nome: true } }),
     prisma.faculdade.findMany({ where: { status: "ativo" }, select: { id: true, nome: true } }),
     prisma.curso.findMany({ where: { status: "ativo" }, select: { id: true, nome: true, faculdadeId: true } }),
     prisma.aluno.findMany({
-      where: { statusCadastro: "ativo" },
+      where: { statusCadastro: "aprovado" },
       select: { usuarioId: true, usuario: { select: { nome: true } } },
     }),
     prisma.motorista.findMany({ where: { status: "ativo" }, select: { id: true, nome: true } }),
@@ -570,12 +576,123 @@ export async function gerarRelatorioCompleto(dataInicial, dataFinal) {
   if (faculdadesValidas.length === 0) throw new Error("Nenhuma faculdade ativa encontrada.");
   if (cursosValidos.length === 0) throw new Error("Nenhum curso ativo encontrado.");
 
-  const [porRota, porFaculdade, porMotorista, porAluno] = await Promise.all([
-    Promise.all(rotasValidas.map((r) => presencasPorRota(r.id, dataInicial, dataFinal))),
-    Promise.all(faculdadesValidas.map((f) => presencasPorFaculdade(f.id, dataInicial, dataFinal))),
-    Promise.all(motoristasValidos.map((m) => presencasPorMotorista(m.id, dataInicial, dataFinal))),
-    Promise.all(alunosValidos.map((a) => presencasPorAluno(a.usuarioId, dataInicial, dataFinal))),
+  const dataFilter = {};
+  if (dataInicial) dataFilter.gte = new Date(dataInicial);
+  if (dataFinal) dataFilter.lte = new Date(dataFinal);
+
+  const rotaIds = rotasValidas.map((r) => r.id);
+  const faculdadeIds = faculdadesValidas.map((f) => f.id);
+  const motoristaIds = motoristasValidos.map((m) => m.id);
+  const alunoIds = alunosValidos.map((a) => a.usuarioId);
+
+  const [presencasPorRotaRaw, presencasPorFaculdadeRaw, viagensPorMotoristaRaw, presencasPorAlunoRaw] = await Promise.all([
+    prisma.presenca.findMany({
+      where: { rotaId: { in: rotaIds }, status: "ativo", ...(Object.keys(dataFilter).length ? { data: dataFilter } : {}) },
+      select: { id: true, data: true, alunoId: true, rotaId: true, aluno: { select: { usuario: { select: { nome: true } } } } },
+    }),
+    prisma.presenca.findMany({
+      where: { status: "ativo", aluno: { curso: { faculdadeId: { in: faculdadeIds } } }, ...(Object.keys(dataFilter).length ? { data: dataFilter } : {}) },
+      select: { id: true, data: true, alunoId: true, aluno: { select: { usuarioId: true, usuario: { select: { nome: true } }, curso: { select: { nome: true, faculdadeId: true, faculdade: { select: { nome: true } } } } } } },
+    }),
+    prisma.viagem.findMany({
+      where: { ...(Object.keys(dataFilter).length ? { data: dataFilter } : {}) },
+      include: { rota: { select: { nome: true } }, presencas: { select: { id: true } } },
+    }),
+    prisma.presenca.findMany({
+      where: { alunoId: { in: alunoIds }, status: "ativo", ...(Object.keys(dataFilter).length ? { data: dataFilter } : {}) },
+      include: { rota: { select: { nome: true } } },
+    }),
   ]);
+
+  const rotasMap = Object.fromEntries(rotasValidas.map((r) => [r.id, r.nome]));
+  const faculdadesMap = Object.fromEntries(faculdadesValidas.map((f) => [f.id, f.nome]));
+  const motoristasMap = Object.fromEntries(motoristasValidos.map((m) => [m.id, m.nome]));
+  const alunosMap = Object.fromEntries(alunosValidos.map((a) => [a.usuarioId, a.usuario.nome]));
+
+  const porRota = rotaIds.map((id) => {
+    const registros = presencasPorRotaRaw.filter((p) => p.rotaId === id);
+    const alunosUnicos = [...new Set(registros.map((p) => p.alunoId))].length;
+    return {
+      rotaId: id,
+      nomeRota: rotasMap[id] || "(Rota sem nome)",
+      periodo: { de: dataInicial, ate: dataFinal },
+      totalPresencas: registros.length,
+      alunosUnicos,
+      registros: registros.map((p) => ({
+        id: p.id,
+        data: p.data,
+        aluno: { id: p.alunoId, nome: p.aluno?.usuario?.nome },
+      })),
+    };
+  });
+
+  const porFaculdade = faculdadeIds.map((id) => {
+    const registros = presencasPorFaculdadeRaw.filter((p) => p.aluno?.curso?.faculdadeId === id);
+    const alunosUnicos = [...new Set(registros.map((p) => p.alunoId))].length;
+    return {
+      faculdadeId: id,
+      faculdadeNome: faculdadesMap[id] || "(Faculdade sem nome)",
+      periodo: { de: dataInicial, ate: dataFinal },
+      totalPresencas: registros.length,
+      alunosUnicos,
+      registros: registros.map((p) => ({
+        id: p.id,
+        data: p.data,
+        aluno: {
+          id: p.alunoId,
+          nome: p.aluno?.usuario?.nome,
+          curso: p.aluno?.curso?.nome,
+          faculdade: p.aluno?.curso?.faculdade?.nome,
+        },
+      })),
+    };
+  });
+
+  const rotaMotoristas = await prisma.rotaMotorista.findMany({
+    where: { rotaId: { in: rotaIds }, motoristaId: { in: motoristaIds }, status: "ativo" },
+    select: { rotaId: true, motoristaId: true, inicio: true, fim: true },
+  });
+
+  const porMotorista = motoristaIds.map((id) => {
+    const rmFilter = rotaMotoristas.filter((rm) => rm.motoristaId === id);
+    const viagens = viagensPorMotoristaRaw.filter((v) =>
+      rmFilter.some(
+        (rm) =>
+          rm.rotaId === v.rotaId &&
+          new Date(v.data) >= new Date(rm.inicio) &&
+          (!rm.fim || new Date(v.data) <= new Date(rm.fim))
+      )
+    );
+    const totalPresencas = viagens.reduce((sum, v) => sum + (v.presencas?.length || 0), 0);
+    return {
+      motoristaId: id,
+      nomeMotorista: motoristasMap[id] || "Motorista sem nome",
+      periodo: { de: dataInicial, ate: dataFinal },
+      totalViagens: viagens.length,
+      totalPresencas,
+      viagens: viagens.map((v) => ({
+        id: v.id,
+        data: v.data,
+        rota: { id: v.rotaId, nome: v.rota.nome },
+        presencas: v.presencas?.length || 0,
+      })),
+    };
+  });
+
+  const porAluno = alunoIds.map((id) => {
+    const registros = presencasPorAlunoRaw.filter((p) => p.alunoId === id);
+    return {
+      alunoId: id,
+      nomeAluno: alunosMap[id] || null,
+      periodo: { de: dataInicial, ate: dataFinal },
+      totalPresencas: registros.length,
+      registros: registros.map((p) => ({
+        id: p.id,
+        data: p.data,
+        rota: { id: p.rotaId, nome: p.rota.nome },
+      })),
+    };
+  });
 
   const faculdadesCursos = await gerarRelatorioPorFaculdadeCurso(dataInicial, dataFinal);
 

@@ -15,7 +15,7 @@ export const sanitizeData = (req, res, next) => {
         data.cpf = SanitizeFunctions.cleanNumeric(data.cpf);
     }
     if (data.rg) {
-        data.rg = data.rg.replace(/[<>]/g, '').trim();
+        data.rg = SanitizeFunctions.cleanString(data.rg);
     }
     if (data.telefone) {
         data.telefone = SanitizeFunctions.cleanNumeric(data.telefone);

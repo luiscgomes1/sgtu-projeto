@@ -29,3 +29,19 @@ export async function updateNomeOrganizacaoController(req, res, next) {
     const updated = await ConfiguracoesService.updateNomeOrganizacao(nomeOrganizacao);
     ok(res, updated);
 }
+
+export async function getHorariosViagemController(req, res, next) {
+    const horarios = await ConfiguracoesService.getHorariosViagem();
+    ok(res, horarios);
+}
+
+export async function updateHorariosViagemController(req, res, next) {
+    const updated = await ConfiguracoesService.updateHorariosViagem(req.body);
+    ok(res, updated);
+}
+
+export async function uploadLogoController(req, res, next) {
+    if (!req.file) return res.status(400).json({ error: 'Nenhum arquivo enviado.' });
+    const updated = await ConfiguracoesService.uploadLogo(req.file);
+    ok(res, updated);
+}

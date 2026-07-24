@@ -12,9 +12,9 @@ export function errorHandler(err, req, res, next) {
   const status = err.status || err.statusCode || 500;
 
   if (status >= 500) {
-    logger.error({ err, status }, 'Erro interno do servidor');
+    logger.error({ err: err.message, status, name: err.name }, 'Erro interno do servidor');
   } else {
-    logger.warn({ err, status }, 'Erro na requisição');
+    logger.warn({ err: err.message, status, name: err.name }, 'Erro na requisição');
   }
 
   if (err.name === 'ValidationError') {

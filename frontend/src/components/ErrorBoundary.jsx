@@ -34,14 +34,16 @@ export default class ErrorBoundary extends Component {
                 Ocorreu um erro inesperado na aplicação. Tente recarregar a página.
               </p>
             </div>
-            <details className="text-left">
-              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
-                Detalhes do erro
-              </summary>
-              <pre className="mt-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground overflow-auto max-h-48">
-                {this.state.error.stack || this.state.error.message}
-              </pre>
-            </details>
+            {import.meta.env.DEV && (
+              <details className="text-left">
+                <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
+                  Detalhes do erro
+                </summary>
+                <pre className="mt-2 p-3 rounded-lg bg-muted text-xs text-muted-foreground overflow-auto max-h-48">
+                  {this.state.error.stack || this.state.error.message}
+                </pre>
+              </details>
+            )}
             <div className="flex gap-3 justify-center">
               <Button onClick={this.handleRetry}>
                 <RefreshCw size={16} className="mr-2" />

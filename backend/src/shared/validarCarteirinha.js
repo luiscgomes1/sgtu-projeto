@@ -10,10 +10,6 @@ export async function ensureCarteirinhaValidaOuAtualizaStatus(alunoUsuarioId) {
   })
 
   if (!carteirinha) {
-    await prisma.aluno.update({
-      where: { usuarioId: alunoUsuarioId },
-      data: { statusCadastro: 'reprovado' }
-    })
-    throw new Error('Carteirinha inválida/expirada. Aluno marcado como reprovado.')
+    throw new Error('Carteirinha inválida ou expirada.')
   }
 }

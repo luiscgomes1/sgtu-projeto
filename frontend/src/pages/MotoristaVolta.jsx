@@ -1,11 +1,12 @@
 // frontend/src/pages/MotoristaVolta.jsx
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import api from "../services/api.js";
+import axios from "axios";
 import { GlobalLoader } from "../components/GlobalLoader.jsx";
 import { Bus, CheckCircle2, XCircle, Clock, Redo } from "lucide-react";
 import { formatTime } from "../utils/formatters.js";
 const REFRESH_INTERVAL = 30000;
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
 export default function MotoristaVolta() {
   const [searchParams] = useSearchParams();
@@ -15,22 +16,23 @@ export default function MotoristaVolta() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [selectedRota, setSelectedRota] = useState(null);
 
-  const token = searchParams.get("token");
+  const tokenRef = useRef(searchParams.get("token"));
 
   const fetchData = useCallback(async () => {
-    if (!token) {
+    const tk = tokenRef.current;
+    if (!tk) {
       setError("Token de acesso não encontrado na URL.");
       setLoading(false);
       return;
     }
 
-    const endpoint = `/viagens/hoje/volta/status?token=${token}`;
-
     try {
       setLoading(true);
       setError(null);
 
-      const response = await api.get(endpoint);
+      const response = await axios.get(`${API_URL}/viagens/hoje/volta/status`, {
+        headers: { 'x-access-token': tk },
+      });
       setData(response.data);
       setLastUpdated(new Date());
       const rotas = Object.keys(response.data.resumoPorRota || {});
@@ -42,7 +44,7 @@ export default function MotoristaVolta() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     document.title = "Painel de Volta - Motorista";

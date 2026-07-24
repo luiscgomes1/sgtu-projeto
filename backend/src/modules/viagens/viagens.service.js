@@ -2,25 +2,11 @@ import { prisma } from '../../config/prisma.js'
 import { INCLUDE_ROTA_NOME } from "../../shared/includes.js"
 
 export async function ensureViagem(rotaId, data) {
-    const where = {}
-    if (rotaId) where.rotaId = rotaId
-    if (data) where.data = data
-
-    const viagemExistente = await prisma.viagem.findFirst({
-        where,
-    })
-
-    if (viagemExistente) return viagemExistente
-
-    const viagemCriada = await prisma.viagem.create({
-        data: {
-            rotaId,
-            data,
-            status: "fechada"
-        }
-    })
-
-    return viagemCriada
+    return prisma.viagem.upsert({
+        where: { rotaId_data: { rotaId, data } },
+        update: {},
+        create: { rotaId, data, status: "fechada" },
+    });
 }
 
 export async function listarViagens({ rotaId, data}) {
@@ -116,7 +102,6 @@ export async function listarStatusVolta() {
                 select: {
                     usuarioId: true,
                     usuario: { select: { nome: true } },
-                    telefone: true,
                     curso: {
                         select: {
                             faculdade: { select: { nome: true } }
@@ -135,7 +120,6 @@ export async function listarStatusVolta() {
         const aluno = {
             id: p.aluno.usuarioId,
             nome: p.aluno.usuario.nome,
-            telefone: p.aluno.telefone,
             faculdade: p.aluno.curso.faculdade.nome,
             confirmadoVolta: p.confirmadoVolta
         }

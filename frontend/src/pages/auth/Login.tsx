@@ -31,7 +31,7 @@ export default function Login() {
     setLoading(true)
     try {
       const result = await apiService.login(data)
-      login(result.user, result.accessToken!, result.refreshToken)
+      login(result.user, result.accessToken!)
 
       if (result.user.tipo === "admin") {
         navigate("/admin")

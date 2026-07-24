@@ -16,11 +16,12 @@ router.post(
   RotaController.createRotaController
 );
 
-router.get("/", requireAuth, RotaController.listRotasController);
+router.get("/", requireAuth, requireRole("admin"), RotaController.listRotasController);
 
 router.get(
     "/paginated",
     requireAuth,
+    requireRole("admin"),
     validate(RotasSchema.rotaListQuerySchema, 'query'),
     RotaController.listRotasPaginatedController
 );
@@ -28,6 +29,7 @@ router.get(
 router.get(
     "/:id", 
     requireAuth,
+    requireRole("admin"),
     validate(RotasSchema.rotaIdParamSchema, "params"),
     RotaController.getRotaByIdController);
 

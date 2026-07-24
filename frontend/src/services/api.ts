@@ -30,17 +30,14 @@ const api = axios.create({
 })
 
 let accessToken: string | null = null
-let refreshToken: string | null = null
 let onLogout: (() => void) | null = null
 
-export function setTokens(access: string, refresh: string) {
+export function setTokens(access: string) {
   accessToken = access
-  refreshToken = refresh
 }
 
 export function clearTokens() {
   accessToken = null
-  refreshToken = null
 }
 
 export function setOnLogout(fn: () => void) {
@@ -90,12 +87,11 @@ api.interceptors.response.use(
       try {
         const { data } = await axios.post<ApiResponse<RefreshResponse>>(
           `${API_URL}/auth/refresh`,
-          { refreshToken },
+          {},
           { withCredentials: true },
         )
         const newAccess = data.data!.accessToken
-        const newRefresh = data.data!.refreshToken
-        setTokens(newAccess, newRefresh)
+        setTokens(newAccess)
         processQueue(null, newAccess)
         originalRequest.headers.Authorization = `Bearer ${newAccess}`
         return api(originalRequest)
@@ -124,11 +120,11 @@ export const apiService = {
   login: (payload: LoginPayload) =>
     api.post<ApiResponse<LoginResponse>>("/auth/login", payload).then(extractData),
 
-  refresh: (token: string) =>
-    api.post<ApiResponse<RefreshResponse>>("/auth/refresh", { refreshToken: token }),
+  refresh: () =>
+    api.post<ApiResponse<RefreshResponse>>("/auth/refresh", {}),
 
   logout: () =>
-    api.post("/auth/logout", { refreshToken }).then(() => clearTokens()),
+    api.post("/auth/logout", {}).then(() => clearTokens()),
 
   // Alunos
   getAlunos: () =>

@@ -14,10 +14,12 @@ router.post(
   pontosController.createPontoController
 );
 
-router.get("/", pontosController.listPontosController);
+router.get("/", requireAuth, requireRole("admin"), pontosController.listPontosController);
 
 router.get(
     "/paginated",
+    requireAuth,
+    requireRole("admin"),
     validate(pontosSchema.pontoListQuerySchema, 'query'),
     pontosController.listPontosPaginatedController
 );
@@ -25,6 +27,7 @@ router.get(
 router.get(
   "/detalhe/:id",
   requireAuth,
+  requireRole("admin"),
   validate(pontosSchema.pontoIdParamsSchema, "params"),
   pontosController.getPontoByIdController
 );

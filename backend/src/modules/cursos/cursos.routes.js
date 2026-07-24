@@ -22,7 +22,7 @@ router.get(
 );
 
 router.get(
-  "/:faculdadeId",
+  "/faculdade/:faculdadeId",
   validate(CursosSchema.faculdadeIdParamSchema, "params"),
   CursosController.listCursosByFaculdadeController
 );

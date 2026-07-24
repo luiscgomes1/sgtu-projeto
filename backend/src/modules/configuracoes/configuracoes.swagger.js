@@ -105,3 +105,81 @@
  *       '200':
  *         description: Nome atualizado
  */
+
+/**
+ * @swagger
+ * /configuracoes/horarios-viagem:
+ *   get:
+ *     summary: Retorna os horários de confirmação de ida e volta (admin)
+ *     tags:
+ *       - Configurações
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       '200':
+ *         description: Horários de viagem
+ */
+
+/**
+ * @swagger
+ * /configuracoes/horarios-viagem:
+ *   put:
+ *     summary: Atualiza os horários de confirmação de ida e volta (admin)
+ *     tags:
+ *       - Configurações
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               horaInicioIda:
+ *                 type: string
+ *                 pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 example: "16:50"
+ *               horaFimIda:
+ *                 type: string
+ *                 pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 example: "18:00"
+ *               horaInicioVolta:
+ *                 type: string
+ *                 pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 example: "21:00"
+ *               horaFimVolta:
+ *                 type: string
+ *                 pattern: '^([01]?[0-9]|2[0-3]):[0-5][0-9]$'
+ *                 example: "23:00"
+ *     responses:
+ *       '200':
+ *         description: Horários atualizados
+ */
+
+/**
+ * @swagger
+ * /configuracoes/logo/upload:
+ *   post:
+ *     summary: Faz upload do logo institucional (admin)
+ *     tags:
+ *       - Configurações
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - logo
+ *             properties:
+ *               logo:
+ *                 type: string
+ *                 format: binary
+ *                 description: Arquivo de imagem (JPEG, PNG, SVG ou WebP, máx. 5MB)
+ *     responses:
+ *       '200':
+ *         description: Logo enviado e URL salva
+ */

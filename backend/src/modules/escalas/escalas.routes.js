@@ -28,6 +28,7 @@ router.post(
 router.get(
   "/:ano",
   requireAuth,
+  requireRole("admin"),
   validate(EscalaSchema.anoParamsSchema, "params"),
   EscalaController.listarEscalasAno
 );
@@ -35,6 +36,7 @@ router.get(
 router.get(
   "/:ano/:mes",
   requireAuth,
+  requireRole("admin"),
   validate(EscalaSchema.anoMesParamsSchema, "params"),
   EscalaController.listarMotoristasDoMesController
 );

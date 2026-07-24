@@ -50,12 +50,14 @@ export function setupAdminBot(bot) {
 
             for (const rota in data) {
                 msg += `🚌 *${rota}*\n`;
-                const lista = data[rota] || [];
-                lista.forEach((aluno, i) => {
-                    msg += `  ${i + 1}. ${aluno.nome}`;
-                    if (aluno.faculdade) msg += ` 🎓 (${aluno.faculdade})`;
-                    msg += "\n";
-                });
+                let idx = 0;
+                for (const faculdade in data[rota]) {
+                    const alunos = data[rota][faculdade] || [];
+                    alunos.forEach((aluno) => {
+                        idx++;
+                        msg += `  ${idx}. ${aluno.nome} 🎓 ${aluno.faculdade || faculdade}\n`;
+                    });
+                }
                 msg += "\n";
             }
             ctx.replyWithMarkdown(msg);

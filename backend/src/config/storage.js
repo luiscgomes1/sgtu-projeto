@@ -11,6 +11,11 @@ export async function uploadFile(filePath, buffer, mimeType) {
   return filePath
 }
 
+export function getPublicUrl(path) {
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
+  return data.publicUrl
+}
+
 export async function getSignedUrl(path, expiresIn = 60 * 60) {
   const { data, error } = await supabase.storage
     .from(BUCKET)

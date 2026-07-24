@@ -90,7 +90,6 @@ describe('Login', () => {
       expect(mockLogin).toHaveBeenCalledWith(
         { tipo: 'admin', email: 'admin@teste.com' },
         'token',
-        'refresh',
       )
     })
     expect(mockNavigate).toHaveBeenCalledWith('/admin')

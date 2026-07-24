@@ -6,20 +6,17 @@ import { truncDate } from "../../utils/functions.js";
 import { INCLUDE_FACULDADE } from '../../shared/includes.js';
 
 export async function gerarCarteirinha(alunoId, criadoPor) {
-  const admin = await prisma.usuario.findUnique({
-    where: { id: criadoPor },
-  });
+  const [[admin, usuarioData, aluno], config] = await Promise.all([
+    Promise.all([
+      prisma.usuario.findUnique({ where: { id: criadoPor }, select: { id: true, tipo: true } }),
+      prisma.usuario.findUnique({ where: { id: alunoId }, select: { id: true, nome: true, email: true } }),
+      prisma.aluno.findUnique({ where: { usuarioId: alunoId } }),
+    ]),
+    prisma.configuracao.findUnique({ where: { id: 1 } }),
+  ]);
 
   if (!admin || admin.tipo !== "admin") throw new Error("Apenas administradores podem gerar carteirinhas.");
-
-  const usuarioData = await prisma.usuario.findUnique({
-    where: { id: alunoId },
-  });
   if (!usuarioData) throw new Error("Usuário não encontrado");
-
-  const aluno = await prisma.aluno.findUnique({
-    where: { usuarioId: alunoId },
-  });
   if (!aluno) throw new Error("Aluno não encontrado ou não aprovado.");
 
   let cursoData = null;
@@ -35,8 +32,6 @@ export async function gerarCarteirinha(alunoId, criadoPor) {
       };
     }
   }
-
-  const config = await prisma.configuracao.findUnique({ where: { id: 1 } });
   const configData = {
     logoUrl: config?.logoUrl || null,
     nomeOrganizacao: config?.nomeOrganizacao || null,
@@ -111,6 +106,11 @@ export async function obterCarteirinhaAtiva(alunoId, requester) {
   };
 }
 
+const CARTEIRINHA_LIST_SELECT = {
+  id: true, alunoId: true, dataValidade: true, arquivoUrl: true,
+  criadoPorId: true, criadoEm: true, atualizadoEm: true,
+};
+
 export async function listarCarteirinhas(alunoId, requester) {
   if (requester.tipo !== "admin" && requester.id !== alunoId) {
     throw new Error("Acesso negado");
@@ -123,6 +123,7 @@ export async function listarCarteirinhas(alunoId, requester) {
       alunoId,
       dataValidade: { gte: new Date(hoje) },
     },
+    select: CARTEIRINHA_LIST_SELECT,
     orderBy: { dataValidade: "desc" },
   });
 
@@ -160,8 +161,11 @@ export async function validarQRCode(token) {
 }
 
 export async function gerarPreviewBuffer(alunoId) {
-  const usuario = await prisma.usuario.findUnique({ where: { id: alunoId } });
-  const aluno = await prisma.aluno.findUnique({ where: { usuarioId: alunoId } });
+  const [usuario, aluno, config] = await Promise.all([
+    prisma.usuario.findUnique({ where: { id: alunoId } }),
+    prisma.aluno.findUnique({ where: { usuarioId: alunoId } }),
+    prisma.configuracao.findUnique({ where: { id: 1 } }),
+  ]);
   if (!usuario || !aluno) return null;
 
   let cursoData = null;
@@ -174,8 +178,6 @@ export async function gerarPreviewBuffer(alunoId) {
       cursoData = { nome: curso.nome, faculdade_nome: curso.faculdade?.nome };
     }
   }
-
-  const config = await prisma.configuracao.findUnique({ where: { id: 1 } });
   const configData = {
     logoUrl: config?.logoUrl || null,
     nomeOrganizacao: config?.nomeOrganizacao || null,

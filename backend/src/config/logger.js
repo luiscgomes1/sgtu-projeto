@@ -10,4 +10,16 @@ export const logger = pino({
       options: { colorize: true, translateTime: 'SYS:HH:MM:ss' },
     },
   }),
+  redact: {
+    paths: [
+      'req.headers.authorization', 'req.headers.cookie', 'req.headers["x-bot-api-key"]',
+      'req.headers["x-access-token"]',
+      'body.password', 'body.senha', 'body.senhaAtual', 'body.novaSenha',
+      'body.token', 'body.refreshToken', 'body.accessToken',
+      'body.cpf', 'body.rg',
+      'err.config.headers.Authorization',
+      'req.query.token', 'req.query.accessToken',
+    ],
+    censor: '[REDACTED]',
+  },
 });

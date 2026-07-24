@@ -48,7 +48,7 @@ model Curso {
   status      String?  @default("ativo")
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  faculdade Faculdade? @relation(fields: [faculdadeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  faculdade Faculdade? @relation(fields: [faculdadeId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   alunos    Aluno[]
 
   @@map("cursos")
@@ -58,8 +58,8 @@ model Curso {
 model Aluno {
   usuarioId  String @id @map("usuario_id") @db.Uuid
   cursoId    String? @map("curso_id") @db.Uuid
-  rg         String?
-  cpf        String?
+  rg         String?  @unique
+  cpf        String?  @unique
   telefone   String?
   dataNascimento DateTime? @map("data_nascimento") @db.Date
   endereco   String?
@@ -77,6 +77,8 @@ model Aluno {
   alunosPontos AlunoPonto[]
   historico    CadastroHistorico[]
 
+  @@index([statusCadastro])
+  @@index([cursoId])
   @@map("alunos")
 }
 
@@ -136,6 +138,10 @@ model RefreshToken {
 model Configuracao {
   id                 Int      @id @default(autoincrement())
   horaLimitePresenca DateTime @default(dbgenerated("'15:00:00'::time without time zone")) @map("hora_limite_presenca") @db.Time(6)
+  horaInicioIda      DateTime @default(dbgenerated("'16:50:00'::time without time zone")) @map("hora_inicio_ida") @db.Time(6)
+  horaFimIda         DateTime @default(dbgenerated("'18:00:00'::time without time zone")) @map("hora_fim_ida") @db.Time(6)
+  horaInicioVolta    DateTime @default(dbgenerated("'21:00:00'::time without time zone")) @map("hora_inicio_volta") @db.Time(6)
+  horaFimVolta       DateTime @default(dbgenerated("'23:00:00'::time without time zone")) @map("hora_fim_volta") @db.Time(6)
   logoUrl            String?  @map("logo_url")
   nomeOrganizacao    String?  @map("nome_organizacao")
 
@@ -146,17 +152,18 @@ model Configuracao {
 model Motorista {
   id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   nome           String
-  cnh            String?
+  cnh            String?  @unique
   telefone       String?
   status         String?  @default("ativo")
   dataNascimento DateTime? @map("data_nascimento") @db.Date
-  cpf            String?
+  cpf            String?  @unique
   validadeCnh    DateTime? @map("validade_cnh") @db.Date
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
   rotaMotoristas    RotaMotorista[]
   escalaAtribuicoes EscalaAtribuicao[]
 
+  @@index([status])
   @@map("motoristas")
 }
 
@@ -247,6 +254,9 @@ model RotaMotorista {
   rota      Rota      @relation(fields: [rotaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   motorista Motorista @relation(fields: [motoristaId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
+  @@index([rotaId])
+  @@index([motoristaId])
+  @@index([status])
   @@map("rota_motoristas")
 }
 
@@ -302,5 +312,6 @@ model Presenca {
 
   @@unique([alunoId, data])
   @@index([rotaId, data])
+  @@index([status])
   @@map("presencas")
 }

@@ -46,10 +46,16 @@ export async function alterarSenha(usuarioId, senhaAtual, novaSenha) {
 
   const senhaHash = await bcrypt.hash(novaSenha, 10);
 
-  const data = await prisma.usuario.update({
-    where: { id: usuarioId },
-    data: { senhaHash },
-  });
+  const [data] = await prisma.$transaction([
+    prisma.usuario.update({
+      where: { id: usuarioId },
+      data: { senhaHash },
+    }),
+    prisma.refreshToken.updateMany({
+      where: { usuarioId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
   return data;
 }
 

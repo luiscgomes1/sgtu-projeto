@@ -26,7 +26,19 @@ export const nomeField = z.string().min(3, 'O nome deve ter pelo menos 3 caracte
 
 export const emailField = z.string().email('O e-mail deve ser válido.');
 
-export const cpfField = z.string().length(11, 'O CPF deve ter exatamente 11 caracteres');
+function validarDigitosCPF(cpf, pos1, pos2) {
+  let soma = 0;
+  for (let i = 0; i < pos1; i++) soma += parseInt(cpf[i]) * (pos2 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10) resto = 0;
+  if (resto !== parseInt(cpf[pos1])) return false;
+  return true;
+}
+
+export const cpfField = z.string().length(11, 'O CPF deve ter exatamente 11 caracteres').refine(cpf => {
+  if (/^(\d)\1{10}$/.test(cpf)) return false;
+  return validarDigitosCPF(cpf, 9, 10) && validarDigitosCPF(cpf, 10, 11);
+}, { message: 'CPF inválido' });
 
 export const telefoneField = z.string().max(15);
 

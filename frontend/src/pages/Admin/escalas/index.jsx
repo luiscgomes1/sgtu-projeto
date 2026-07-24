@@ -159,7 +159,7 @@ export default function AdminEscalas() {
           <Calendar className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-bold tracking-tight">Gerenciar Escalas ({anoAtual})</h1>
         </div>
-        {escalas.length > 0 && (
+        {import.meta.env.VITE_ENABLE_RESET === 'true' && escalas.length > 0 && (
           <Button variant="destructive" onClick={() => setShowResetDialog(true)} disabled={isProcessing}>
             <Trash2 className="mr-2 h-4 w-4" /> Apagar Tudo
           </Button>

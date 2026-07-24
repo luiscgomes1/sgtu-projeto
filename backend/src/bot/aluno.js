@@ -34,7 +34,7 @@ export function setupAlunoBot(bot) {
             setUserCommands(ctx.telegram, ctx.from.id, data.user.tipo);
             ctx.reply("✅ Login realizado com sucesso!");
         } catch (error) {
-            logger.error({ status: error.response?.status, data: error.response?.data, message: error.message });
+            logger.error({ status: error.response?.status, message: error.message });
             ctx.reply("❌ Falha no login. Verifique suas credenciais.");
         }
     });
@@ -55,7 +55,7 @@ export function setupAlunoBot(bot) {
 
             ctx.reply(`🎫 Sua carteirinha é válida até: ${formatDate(carteirinha.data_validade)}`);
         } catch (err) {
-            logger.error({ status: err.response?.status, data: err.response?.data, message: err.message }, 'Erro validade bot');
+            logger.error({ status: err.response?.status, message: err.message }, 'Erro validade bot');
             ctx.reply("❌ Falha ao obter carteirinha.");
         }
     });
@@ -97,7 +97,7 @@ export function setupAlunoBot(bot) {
             const data = resp?.data;
             ctx.reply(`✅ Presença marcada com sucesso para hoje: ${data?.message || 'OK'}`);
         } catch (error) {
-            logger.error({ status: error.response?.status, data: error.response?.data, message: error.message }, 'Erro ao marcar presenca via bot');
+            logger.error({ status: error.response?.status, message: error.message }, 'Erro ao marcar presenca via bot');
             const serverMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Erro interno.';
             ctx.reply(`⚠️ Erro ao registrar presença: ${serverMsg}`);
         }

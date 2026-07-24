@@ -89,9 +89,6 @@ export async function listarAlunosDoPonto(pontoId) {
     return data.map(item => ({
         id: item.alunoId,
         nome: item.aluno?.usuario?.nome,
-        cpf: item.aluno?.cpf,
-        rg: item.aluno?.rg,
-        telefone: item.aluno?.telefone,
         status: item.status
     }));
 }

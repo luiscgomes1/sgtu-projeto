@@ -9,6 +9,7 @@ import {
   Users,
   ClipboardList,
   FileText,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { label: "Motoristas", to: "/admin/motoristas", icon: <Users size={18} /> },
   { label: "Escalas", to: "/admin/escalas", icon: <ClipboardList size={18} /> },
   { label: "Relatórios", to: "/admin/relatorios", icon: <FileText size={18} /> },
+  { label: "Configurações", to: "/admin/configuracoes", icon: <Settings size={18} /> },
 ]
 
 interface SidebarProps {

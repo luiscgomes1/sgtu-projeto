@@ -9,18 +9,12 @@ export async function botTokenController(req, res, next) {
       return fail(res, 401, 'API key inválida para emissão de token de bot.');
     }
 
-    const { telegramId, userId } = req.body || {};
-    if (!telegramId && !userId) {
-      return fail(res, 400, 'Informe telegramId ou userId.');
+    const { telegramId } = req.body || {};
+    if (!telegramId) {
+      return fail(res, 400, 'Informe telegramId.');
     }
 
-    let result = null;
-    if (telegramId) {
-      result = await BotTokenService.generateBotTokenForTelegramId(telegramId, { scope: req.body.scope });
-    } else if (userId) {
-      result = await BotTokenService.generateBotTokenForUserId(userId, { scope: req.body.scope });
-    }
-
+    const result = await BotTokenService.generateBotTokenForTelegramId(telegramId, { scope: req.body.scope });
     if (!result) return fail(res, 404, 'Usuário não encontrado para o identificador informado.');
 
     return ok(res, { token: result.token, user: result.user });

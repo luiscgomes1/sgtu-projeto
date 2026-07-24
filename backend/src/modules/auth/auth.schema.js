@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { emailField } from '../../shared/schemas.js';
+import { emailField, senhaField } from '../../shared/schemas.js';
 
 export const loginSchema = z.object({
   email: emailField,
-  senha: z.string().min(5, 'A senha deve ter pelo menos 5 caracteres'),
+  senha: senhaField,
 });
 
 export const refreshSchema = z.object({

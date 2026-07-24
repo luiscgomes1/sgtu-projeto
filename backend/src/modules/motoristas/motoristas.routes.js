@@ -18,11 +18,12 @@ router.post(
   MotoristaController.createMotoristaController
 );
 
-router.get("/", requireAuth, MotoristaController.listMotoristasController);
+router.get("/", requireAuth, requireRole("admin"), MotoristaController.listMotoristasController);
 
 router.get(
     "/paginated",
     requireAuth,
+    requireRole("admin"),
     validate(MotoristaSchema.motoristaListQuerySchema, 'query'),
     MotoristaController.listMotoristasPaginatedController
 );

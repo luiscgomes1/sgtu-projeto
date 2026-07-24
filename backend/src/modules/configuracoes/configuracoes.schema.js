@@ -13,3 +13,12 @@ export const logoUpdateSchema = z.object({
 export const nomeOrganizacaoUpdateSchema = z.object({
     nomeOrganizacao: z.string().min(3, 'O nome da organização deve ter no mínimo 3 caracteres.').max(100, 'O nome da organização deve ter no máximo 100 caracteres.'),
 });
+
+const timeField = z.string().regex(timeRegex, 'O campo deve estar no formato HH:mm (ex: 16:50).');
+
+export const horariosViagemUpdateSchema = z.object({
+    horaInicioIda: timeField.optional(),
+    horaFimIda: timeField.optional(),
+    horaInicioVolta: timeField.optional(),
+    horaFimVolta: timeField.optional(),
+});

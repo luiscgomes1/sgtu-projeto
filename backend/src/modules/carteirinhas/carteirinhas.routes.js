@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../../middleware/auth.js";
 import * as CarteirinhaSchema from "./carteirinhas.schema.js";
 import { validate } from "../../middleware/validate.js";
 import { sanitizeData } from "../../middleware/sanitize.js";
+import { publicLimiter } from "../../middleware/rateLimit.js";
 
 const router = Router();
 
@@ -17,11 +18,13 @@ router.post(
   CarteirinhasController.gerarCarteirinhaController
 );
 
-// Preview mockado da carteirinha — dados fictícios para testes visuais
-router.get(
-  "/preview-mock",
-  CarteirinhasController.previewMockController
-);
+// Preview mockado da carteirinha — apenas em desenvolvimento
+if (process.env.NODE_ENV !== 'production') {
+  router.get(
+    "/preview-mock",
+    CarteirinhasController.previewMockController
+  );
+}
 
 // Obter carteirinha ativa
 router.get(
@@ -42,6 +45,7 @@ router.get(
 //Validar QR Code: aluno no ônibus
 router.post(
   "/validar-qrcode",
+  publicLimiter,
   sanitizeData,
   validate(CarteirinhaSchema.validarQrCodeSchema, "body"),
   CarteirinhasController.validarQRCodeController

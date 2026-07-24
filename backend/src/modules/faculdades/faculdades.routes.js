@@ -22,6 +22,7 @@ router.get("/", FaculdadesController.listFaculdadesController);
 router.get(
   "/paginated",
   requireAuth,
+  requireRole("admin"),
   validate(FaculdadesSchema.faculdadeListQuerySchema, 'query'),
   FaculdadesController.listFaculdadesPaginatedController
 );

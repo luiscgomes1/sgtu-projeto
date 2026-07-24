@@ -19,7 +19,7 @@ import signupRoutes from '../modules/signup/signup.routes.js';
 import uploadRoutes from '../upload/upload.routes.js';
 import usuarioRoutes from '../modules/usuarios/usuario.routes.js';
 import viagensRoutes from '../modules/viagens/viagens.routes.js';
-import { authLimiter, uploadLimiter } from '../middleware/rateLimit.js';
+import { authLimiter, uploadLimiter, publicLimiter } from '../middleware/rateLimit.js';
 
 const router = express.Router();
 
@@ -28,9 +28,9 @@ router.use('/aluno-pontos', alunoPontosRoutes);
 router.use('/auth', authLimiter, authRoutes);
 router.use('/carteirinhas', carteirinhasRoutes);
 router.use('/configuracoes', configuracoesRoutes);
-router.use('/cursos', cursosRoutes);
+router.use('/cursos', publicLimiter, cursosRoutes);
 router.use('/escalas', escalasRoutes);
-router.use('/faculdades', faculdadeRoutes);
+router.use('/faculdades', publicLimiter, faculdadeRoutes);
 router.use('/motoristas', motoristasRoutes);
 router.use('/pontos', pontosRoutes);
 router.use('/presencas', presencasRoutes);

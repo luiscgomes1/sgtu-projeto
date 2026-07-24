@@ -18,10 +18,9 @@ export const signupRequestSchema = z.object({
 });
 
 export const signupUpdateDocsSchema = z.object({
-  comprovante_matricula_url: z.string().optional().or(z.literal('')),
-  comprovante_residencia_url: z.string().optional().or(z.literal('')),
-  foto_url: z.string().optional().or(z.literal('')),
-  status: z.enum(['pendente', 'ativo', 'reprovado']).optional(),
+  comprovante_matricula_url: z.string().url().optional().or(z.literal('')),
+  comprovante_residencia_url: z.string().url().optional().or(z.literal('')),
+  foto_url: z.string().url().optional().or(z.literal('')),
 }).refine(data => Object.keys(data).length > 0, { message: 'Pelo menos um campo deve ser fornecido para atualização' });
 
 export const requestIdParamsSchema = z.object({

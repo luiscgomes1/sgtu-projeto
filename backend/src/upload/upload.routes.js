@@ -3,6 +3,7 @@ import multer from 'multer';
 import { validate } from '../middleware/validate.js';
 import { uuidParam } from '../shared/schemas.js';
 import { z } from 'zod';
+import { prisma } from '../config/prisma.js';
 import { uploadAndSaveFile } from './upload.service.js';
 import { fail, created } from '../utils/response.js';
 
@@ -15,7 +16,25 @@ const upload = multer({
 });
 const router = Router();
 
-router.post('/:alunoId', validate(z.object({ alunoId: uuidParam }), 'params'), upload.array('files'), async (req, res, next) => {
+async function validateAlunoPendente(req, res, next) {
+  const { alunoId } = req.params;
+  const aluno = await prisma.aluno.findUnique({ where: { usuarioId: alunoId }, select: { statusCadastro: true } });
+  if (!aluno) return fail(res, 404, 'Solicitação não encontrada.');
+  if (aluno.statusCadastro !== 'pendente') return fail(res, 404, 'Solicitação não encontrada.');
+  next();
+}
+
+router.post('/:alunoId', validate(z.object({ alunoId: uuidParam }), 'params'), validateAlunoPendente, (req, res, next) => {
+  upload.array('files')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return fail(res, 400, 'Arquivo muito grande. Máximo 15MB por arquivo.');
+      if (err.code === 'LIMIT_FILE_COUNT') return fail(res, 400, 'Máximo de 3 arquivos por upload.');
+      return fail(res, 400, 'Erro no upload.');
+    }
+    if (err) return next(err);
+    next();
+  });
+}, async (req, res, next) => {
   const { alunoId } = req.params;
   const files = req.files;
 
