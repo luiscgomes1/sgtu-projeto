@@ -46,7 +46,7 @@ export default function Cadastro() {
       try {
         const { data: res } = await api.get("/faculdades")
         setFaculdades(Array.isArray(res) ? res : [])
-      } catch (error) {
+      } catch {
         showToast("error", "Erro ao carregar faculdades.")
       }
     }
@@ -59,7 +59,7 @@ export default function Cadastro() {
     try {
       const { data: resCursos } = await api.get(`/cursos/${faculdadeId}`)
       setCursos(Array.isArray(resCursos) ? resCursos : [])
-    } catch (error) {
+    } catch {
       showToast("error", "Erro ao carregar cursos.")
     }
   }
@@ -108,7 +108,7 @@ export default function Cadastro() {
 
       showToast("success", "Cadastro com sucesso! Aguarde aprovação do administrador.")
       setTimeout(() => navigate("/"), 3000)
-    } catch (error) {
+    } catch {
       showToast("error", "Erro ao enviar cadastro. Verifique os dados.")
     } finally {
       setLoading(false)
